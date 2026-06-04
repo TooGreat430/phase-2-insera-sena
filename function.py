@@ -8136,7 +8136,7 @@ def _rename_final_fields(rows: list):
 # ==============================
 # (NEW) CONVERT TO CSV -> CUSTOM FOLDER/PATH
 # ==============================
-def _convert_to_csv_path(blob_path, rows, field_order=None):
+def _convert_to_csv_path(blob_path, rows, field_order=None, strict_fields=False):
     if rows is None:
         raise Exception("Tidak ada data untuk CSV")
 
@@ -8166,11 +8166,16 @@ def _convert_to_csv_path(blob_path, rows, field_order=None):
                 keys.append(k)
                 used.add(k)
 
-        # 2) append sisanya biar tidak error kalau ada kolom ekstra
-        for k in union_keys:
-            if k not in used:
-                keys.append(k)
-                used.add(k)
+        # [INV-ONLY] strict_fields=True -> field_order adalah satu-satunya penentu
+        # kolom output. Kolom apa pun di luar daftar (mis. sisa pl_/bl_/coo_ yang
+        # ditulis oleh logika vendor/PO mapping) TIDAK ditulis ke CSV.
+        # extrasaction="ignore" pada DictWriter menangani key ekstra di row.
+        if not strict_fields:
+            # 2) append sisanya biar tidak error kalau ada kolom ekstra
+            for k in union_keys:
+                if k not in used:
+                    keys.append(k)
+                    used.add(k)
     else:
         # fallback logic lama (match_* di depan)
         priority = ["match_score", "match_description"]
@@ -9619,7 +9624,8 @@ def run_grouped_ocr(invoice_name, uploaded_docs, with_total_container, forced_ve
         detail_csv_uri = _convert_to_csv_path(
             f"output/detail/{invoice_name}_detail.csv",
             merged_detail_rows,
-            field_order=_get_detail_csv_field_order(forced_vendor_id)
+            field_order=_get_detail_csv_field_order(forced_vendor_id),
+            strict_fields=True,  # [INV-ONLY] hanya kolom field_order (no pl_/bl_/coo_)
         )
 
         total_csv_uri = None
@@ -14108,7 +14114,8 @@ def run_ocr(
         detail_csv_uri = _convert_to_csv_path(
             f"output/detail/{invoice_name}_detail.csv",
             result["detail_rows"],
-            field_order=_get_detail_csv_field_order(vendor_id)
+            field_order=_get_detail_csv_field_order(vendor_id),
+            strict_fields=True,  # [INV-ONLY] hanya kolom field_order (no pl_/bl_/coo_)
         )
 
         total_csv_uri = None
