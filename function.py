@@ -42,7 +42,7 @@ from vendor_detection import (
 )
 
 BATCH_SIZE = 30
-CHENGS_DETAIL_BATCH_SIZE = 30
+CHENGS_DETAIL_BATCH_SIZE = 3
 DETAIL_GEMINI_RECHECK_BATCH_SIZE = int(os.getenv("DETAIL_GEMINI_RECHECK_BATCH_SIZE", "30"))
 test_number = 2
 
@@ -164,12 +164,15 @@ def _get_detail_batch_size_for_vendor(vendor_id: str = "default") -> int:
     Batch size khusus detail extraction.
 
     Default = BATCH_SIZE.
-    Khusus vendor chengs = CHENGS_DETAIL_BATCH_SIZE (30).
-    Catatan: dulu 3 untuk one-page merge (PDF 1 halaman raksasa), tapi sejak
-    chengs di-skip one-page (baca multi-page asli) dan per-batch slicing DIMATIKAN
-    untuk chengs, tiap batch membaca PDF penuh. Batch 3 + PDF penuh = 127 panggilan
-    (boros token). Batch 30 = ~13 panggilan dengan konteks halaman penuh, sehingga
-    quantity/amount terbaca akurat (tidak ter-misread seperti saat slice ±1 halaman).
+    Khusus vendor chengs = CHENGS_DETAIL_BATCH_SIZE (3).
+    Konfigurasi yang TERBUKTI akurat untuk chengs = konteks halaman PENUH + batch
+    KECIL (3). Per-batch slicing DIMATIKAN untuk chengs (lihat is_chengs di base
+    detail & recheck) supaya model membaca PDF penuh. Catatan eksperimen:
+    - slice ±1 halaman + batch 3  -> qty sebagian ter-misread (konteks halaman hilang)
+    - PDF penuh + batch 30        -> qty target pulih TAPI model under-read baris lain
+                                     (kehilangan penyelarasan saat ekstrak 30 baris/call)
+    - PDF penuh + batch 3         -> meniru era one-page yang akurat; ~127 panggilan
+                                     (lambat/boros token) tapi penyelarasan per-baris terbaik.
     """
     if normalize_vendor_id(vendor_id) == "chengs":
         return CHENGS_DETAIL_BATCH_SIZE
