@@ -42,7 +42,7 @@ from vendor_detection import (
 )
 
 BATCH_SIZE = 30
-CHENGS_DETAIL_BATCH_SIZE = 3
+CHENGS_DETAIL_BATCH_SIZE = 30
 DETAIL_GEMINI_RECHECK_BATCH_SIZE = int(os.getenv("DETAIL_GEMINI_RECHECK_BATCH_SIZE", "30"))
 test_number = 2
 
@@ -164,8 +164,12 @@ def _get_detail_batch_size_for_vendor(vendor_id: str = "default") -> int:
     Batch size khusus detail extraction.
 
     Default = BATCH_SIZE.
-    Khusus vendor chengs = 3, supaya prompt per batch lebih kecil
-    dan mengurangi risiko MAX_TOKENS / output kepotong.
+    Khusus vendor chengs = CHENGS_DETAIL_BATCH_SIZE (30).
+    Catatan: dulu 3 untuk one-page merge (PDF 1 halaman raksasa), tapi sejak
+    chengs di-skip one-page (baca multi-page asli) dan per-batch slicing DIMATIKAN
+    untuk chengs, tiap batch membaca PDF penuh. Batch 3 + PDF penuh = 127 panggilan
+    (boros token). Batch 30 = ~13 panggilan dengan konteks halaman penuh, sehingga
+    quantity/amount terbaca akurat (tidak ter-misread seperti saat slice ±1 halaman).
     """
     if normalize_vendor_id(vendor_id) == "chengs":
         return CHENGS_DETAIL_BATCH_SIZE
@@ -12042,7 +12046,12 @@ def _call_gemini_detail_line_recheck_once(
         
         # === LOGIC TRIGGER >= 90 LINE ITEMS UNTUK RECHECK ===
         is_karet_deli = normalize_vendor_id(vendor_id) == "karet_deli"
-        if (total_row >= 90 or is_karet_deli) and index_items and local_pdf_path and run_prefix:
+        # chengs: slicing recheck DIMATIKAN (lihat alasan di base detail). Kalau recheck
+        # ikut baca slice ±1 halaman, ia hanya meng-konfirmasi ulang quantity yang sama
+        # salahnya dengan base detail → greedy-gate tidak pernah dapat usulan koreksi,
+        # misread lolos. Recheck WAJIB baca PDF penuh agar bisa mengoreksi.
+        is_chengs = normalize_vendor_id(vendor_id) == "chengs"
+        if (total_row >= 90 or is_karet_deli) and not is_chengs and index_items and local_pdf_path and run_prefix:
             row_nos = [int(item["_detail_row_no"]) for item in batch if item.get("_detail_row_no")]
             pages = []
             
@@ -13606,13 +13615,21 @@ def run_ocr(
             batch_file_uri = base_detail_input_uri  # Default uri (Full PDF)
             
             is_karet_deli = normalize_vendor_id(vendor_id) == "karet_deli"
+            # chengs: per-batch slicing DIMATIKAN. Slice ±1 halaman membuang konteks
+            # halaman sekitar yang dibutuhkan model untuk menyelaraskan tiap anchor ke
+            # kolom Quantity baris yang benar pada invoice yang panjang & repetitif,
+            # sehingga sebagian quantity ter-misread (mis. 700->360, 1000->2) dan
+            # total_amount jadi undercount. Dengan baca PDF penuh + batch 30, konteks
+            # halaman utuh kembali (seperti era one-page merge yang quantity-nya akurat)
+            # tapi tetap multi-page asli sehingga dup/skip tetap beres.
+            is_chengs = normalize_vendor_id(vendor_id) == "chengs"
             # Per-batch PDF slicing hanya valid bila merged_pdf_detail adalah PDF
             # multi-halaman ASLI, yaitu vendor yang SKIP one-page preprocess
-            # (mis. shimano/karet_deli/haomeng/chengs). Untuk vendor yang TIDAK
+            # (mis. shimano/karet_deli/haomeng). Untuk vendor yang TIDAK
             # di-skip (tetap one-page merge), merged_pdf_detail = 1 halaman panjang
             # sehingga nomor halaman index tidak cocok dan slicing bisa menghasilkan
             # PDF 0 halaman ("The document has no pages"). Vendor itu pakai full PDF.
-            if _skip_onepage_preprocess and total_detail_pages > 1 and (total_row >= 90 or is_karet_deli):
+            if _skip_onepage_preprocess and not is_chengs and total_detail_pages > 1 and (total_row >= 90 or is_karet_deli):
                 pages = [
                     int(x.get("page_no") or x.get("page", 0))
                     for x in index_slice
