@@ -13526,37 +13526,47 @@ def run_ocr(
             batch_file_uri = base_detail_input_uri  # Default uri (Full PDF)
             
             is_karet_deli = normalize_vendor_id(vendor_id) == "karet_deli"
-            if total_row >= 90 or is_karet_deli:
+            # Per-batch PDF slicing hanya valid bila merged_pdf_detail adalah PDF
+            # multi-halaman ASLI, yaitu vendor yang SKIP one-page preprocess
+            # (mis. shimano/karet_deli). Untuk vendor one-page-merged (mis. chengs),
+            # merged_pdf_detail = 1 halaman panjang sehingga nomor halaman index
+            # tidak cocok dan slicing bisa menghasilkan PDF 0 halaman
+            # ("The document has no pages"). Vendor itu pakai full PDF.
+            if _skip_onepage_preprocess and total_detail_pages > 1 and (total_row >= 90 or is_karet_deli):
                 pages = [
-                    int(x.get("page_no") or x.get("page", 0)) 
-                    for x in index_slice 
+                    int(x.get("page_no") or x.get("page", 0))
+                    for x in index_slice
                     if x.get("page_no") or x.get("page")
                 ]
-                
+
                 if pages:
                     min_p = min(pages)
                     max_p = max(pages)
-                    
+
                     # Potong dengan overlap +/- 1 halaman sebagai safety net
-                    start_idx = max(0, min_p - 1 - 1) 
+                    start_idx = max(0, min_p - 1 - 1)
                     end_idx = min(total_detail_pages - 1, max_p - 1 + 1)
-                    
-                    sliced_local = _create_sliced_pdf_for_batch(merged_pdf_detail, start_idx, end_idx)
-                    temp_local_paths.append(sliced_local)
-                    
-                    batch_file_uri = _upload_temp_pdf_to_gcs(
-                        sliced_local,
-                        run_prefix,
-                        name=f"detail_batch_{batch_no}_{start_idx}_{end_idx}"
-                    )
-                    
-                    prompt += (
-                        f"\n\nPERHATIAN GUARDRAIL INDEKS:\n"
-                        f"Anda sedang membaca POTONGAN DOKUMEN (Halaman fisik ke-{start_idx+1} sampai {end_idx+1}). "
-                        f"JANGAN mereset indeks hitungan Anda dari 1! "
-                        f"Tugas Anda HANYA mengekstrak line item ke-{first_index} sampai {last_index} "
-                        f"secara berurutan menggunakan _expected_index yang diberikan."
-                    )
+
+                    # Guard: jangan pernah membuat slice kosong (start > end),
+                    # karena PDF 0 halaman akan ditolak Gemini. Kalau range tidak
+                    # valid, biarkan batch_file_uri tetap full PDF.
+                    if start_idx <= end_idx:
+                        sliced_local = _create_sliced_pdf_for_batch(merged_pdf_detail, start_idx, end_idx)
+                        temp_local_paths.append(sliced_local)
+
+                        batch_file_uri = _upload_temp_pdf_to_gcs(
+                            sliced_local,
+                            run_prefix,
+                            name=f"detail_batch_{batch_no}_{start_idx}_{end_idx}"
+                        )
+
+                        prompt += (
+                            f"\n\nPERHATIAN GUARDRAIL INDEKS:\n"
+                            f"Anda sedang membaca POTONGAN DOKUMEN (Halaman fisik ke-{start_idx+1} sampai {end_idx+1}). "
+                            f"JANGAN mereset indeks hitungan Anda dari 1! "
+                            f"Tugas Anda HANYA mengekstrak line item ke-{first_index} sampai {last_index} "
+                            f"secara berurutan menggunakan _expected_index yang diberikan."
+                        )
 
             jobs.append({
                 "batch_no": batch_no,
