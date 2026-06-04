@@ -26,6 +26,8 @@ def _collect_paths(obj):
 if __name__ == "__main__":
     invoice_name = sys.argv[1]
     with_total_container = sys.argv[2].lower() == "true"
+    # [INV-ONLY] forced: total/container butuh BL, dimatikan sementara di mode INV-only.
+    with_total_container = False
     payload = json.loads(sys.argv[3])
 
     try:

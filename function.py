@@ -2711,44 +2711,49 @@ def _group_docs_by_invoice_no(invoice_paths, packing_paths, coo_paths=None, vend
         if entry.get("is_temp"):
             grp["temp_invoice_split_paths"].append(p)
 
-    packing_entries = _explode_doc_paths_for_grouping(packing_paths, doc_type="packing", vendor_id=vendor_id)
-    _log_extracted_invoice_refs("packing", packing_entries)
+    # [INV-ONLY] disabled: PL tidak diproses. Grouping cukup berbasis Invoice.
+    # packing_entries = _explode_doc_paths_for_grouping(packing_paths, doc_type="packing", vendor_id=vendor_id)
+    # _log_extracted_invoice_refs("packing", packing_entries)
+    #
+    # for entry in packing_entries:
+    #     p = entry["path"]
+    #     group_key = entry["group_key"]
+    #     raw_invoice_no = entry["invoice_no"]
+    #
+    #     if group_key not in groups:
+    #         skipped_packing.append({"invoice_no": raw_invoice_no, "file": entry.get("source_file", os.path.basename(p))})
+    #         continue
+    #     groups[group_key]["packing_paths"].append(p)
+    #     if entry.get("is_temp"):
+    #         groups[group_key]["temp_packing_split_paths"].append(p)
 
-    for entry in packing_entries:
-        p = entry["path"]
-        group_key = entry["group_key"]
-        raw_invoice_no = entry["invoice_no"]
+    # [INV-ONLY] disabled: COO tidak diproses.
+    # coo_entries = _explode_doc_paths_for_grouping(coo_paths, doc_type="coo", vendor_id=vendor_id)
+    # _log_extracted_invoice_refs("coo", coo_entries)
+    #
+    # for entry in coo_entries:
+    #     p = entry["path"]
+    #     group_key = entry["group_key"]
+    #     raw_invoice_no = entry["invoice_no"]
+    #
+    #     if group_key not in groups:
+    #         skipped_coo.append({"invoice_no": raw_invoice_no, "file": entry.get("source_file", os.path.basename(p))})
+    #         continue
+    #     groups[group_key]["coo_paths"].append(p)
+    #     if entry.get("is_temp"):
+    #         groups[group_key]["temp_coo_split_paths"].append(p)
 
-        if group_key not in groups:
-            skipped_packing.append({"invoice_no": raw_invoice_no, "file": entry.get("source_file", os.path.basename(p))})
-            continue
-        groups[group_key]["packing_paths"].append(p)
-        if entry.get("is_temp"):
-            groups[group_key]["temp_packing_split_paths"].append(p)
-
-    coo_entries = _explode_doc_paths_for_grouping(coo_paths, doc_type="coo", vendor_id=vendor_id)
-    _log_extracted_invoice_refs("coo", coo_entries)
-
-    for entry in coo_entries:
-        p = entry["path"]
-        group_key = entry["group_key"]
-        raw_invoice_no = entry["invoice_no"]
-
-        if group_key not in groups:
-            skipped_coo.append({"invoice_no": raw_invoice_no, "file": entry.get("source_file", os.path.basename(p))})
-            continue
-        groups[group_key]["coo_paths"].append(p)
-        if entry.get("is_temp"):
-            groups[group_key]["temp_coo_split_paths"].append(p)
-
-    valid_groups = {}
-    for group_key, grp in groups.items():
-        if not grp["packing_paths"]:
-            dropped_invoice_groups.append({"invoice_no": grp["invoice_no"], "invoice_files": [os.path.basename(x) for x in grp["invoice_paths"]]})
-            continue
-        valid_groups[group_key] = grp
-
-    return valid_groups
+    # [INV-ONLY] disabled: filter lama membuang group tanpa PL.
+    # Tanpa PL, setiap group invoice valid.
+    # valid_groups = {}
+    # for group_key, grp in groups.items():
+    #     if not grp["packing_paths"]:
+    #         dropped_invoice_groups.append({"invoice_no": grp["invoice_no"], "invoice_files": [os.path.basename(x) for x in grp["invoice_paths"]]})
+    #         continue
+    #     valid_groups[group_key] = grp
+    #
+    # return valid_groups
+    return groups
 
 def _first_text(rows: list, key: str, default="null"):
     v = _first_non_null(rows, key)
@@ -6428,16 +6433,22 @@ def _enforce_absent_optional_docs_empty(
     container_rows: list = None,
     has_bl_doc: bool = True,
     has_coo_doc: bool = True,
+    has_pl_doc: bool = True,  # [INV-ONLY] added: perlakukan PL sbg optional doc (default True = perilaku lama)
 ):
     """
-    Jika BL / COO tidak diupload, semua kolom terkait wajib kosong/null.
+    Jika PL / BL / COO tidak diupload, semua kolom terkait wajib kosong/null.
 
     Rule:
+    - has_pl_doc=False  -> semua pl_* = 'null'   # [INV-ONLY] added
     - has_bl_doc=False  -> semua bl_* = 'null'
     - has_coo_doc=False -> semua coo_* = 'null'
     - jika BL tidak ada, container_rows juga dikosongkan
     """
     prefixes = []
+
+    # [INV-ONLY] added: bila PL tidak diproses, null-kan semua pl_* (struktur kolom tetap ada)
+    if not has_pl_doc:
+        prefixes.append("pl_")
 
     if not has_bl_doc:
         prefixes.append("bl_")
@@ -6460,6 +6471,7 @@ def _enforce_absent_optional_docs_empty(
 
     print(
         f"[OPTIONAL_DOC_GUARD] "
+        f"has_pl_doc={has_pl_doc} "  # [INV-ONLY] added
         f"has_bl_doc={has_bl_doc} "
         f"has_coo_doc={has_coo_doc} "
         f"forced_null_prefixes={prefixes}"
@@ -9297,8 +9309,12 @@ def run_grouped_ocr(invoice_name, uploaded_docs, with_total_container, forced_ve
 
     if not invoice_paths:
         raise Exception("invoice_paths kosong")
-    if not packing_paths:
-        raise Exception("packing_paths kosong")
+    # [INV-ONLY] disabled: PL tidak wajib lagi.
+    # if not packing_paths:
+    #     raise Exception("packing_paths kosong")
+
+    # [INV-ONLY] forced: total/container butuh BL, dimatikan di mode INV-only.
+    with_total_container = False
 
     create_running_markers(invoice_name, with_total_container)
 
@@ -9334,23 +9350,26 @@ def run_grouped_ocr(invoice_name, uploaded_docs, with_total_container, forced_ve
                 merged_invoice_pdf = _merge_pdfs(grp["invoice_paths"])
                 temp_group_paths.append(merged_invoice_pdf)
 
-                merged_packing_pdf = _merge_pdfs(grp["packing_paths"])
-                temp_group_paths.append(merged_packing_pdf)
+                # [INV-ONLY] disabled: PL tidak diproses.
+                # merged_packing_pdf = _merge_pdfs(grp["packing_paths"])
+                # temp_group_paths.append(merged_packing_pdf)
 
                 grouped_pdf_paths = [
                     merged_invoice_pdf,
-                    merged_packing_pdf,
+                    # merged_packing_pdf,  # [INV-ONLY] disabled
                 ]
 
-                # BL global (1 file untuk semua OCR)
-                if bl_path:
-                    grouped_pdf_paths.append(bl_path)
+                # [INV-ONLY] disabled: BL global tidak diproses.
+                # # BL global (1 file untuk semua OCR)
+                # if bl_path:
+                #     grouped_pdf_paths.append(bl_path)
 
-                # COO per invoice group
-                if grp["coo_paths"]:
-                    merged_coo_pdf = _merge_pdfs(grp["coo_paths"])
-                    temp_group_paths.append(merged_coo_pdf)
-                    grouped_pdf_paths.append(merged_coo_pdf)
+                # [INV-ONLY] disabled: COO per invoice group tidak diproses.
+                # # COO per invoice group
+                # if grp["coo_paths"]:
+                #     merged_coo_pdf = _merge_pdfs(grp["coo_paths"])
+                #     temp_group_paths.append(merged_coo_pdf)
+                #     grouped_pdf_paths.append(merged_coo_pdf)
 
                 group_output_name = (
                     f"{invoice_name}__{_safe_output_suffix(grp['invoice_no'])}"
@@ -9367,8 +9386,8 @@ def run_grouped_ocr(invoice_name, uploaded_docs, with_total_container, forced_ve
                     persist_output=False,
                     manage_markers=False,
                     forced_vendor_id=forced_vendor_id,
-                    has_bl_doc=bool(bl_path),
-                    has_coo_doc=bool(grp["coo_paths"]),
+                    has_bl_doc=False,   # [INV-ONLY] forced: BL tidak diproses
+                    has_coo_doc=False,  # [INV-ONLY] forced: COO tidak diproses
                 )
 
                 merged_detail_rows.extend(result.get("detail_rows") or [])
@@ -9555,7 +9574,8 @@ def run_grouped_ocr(invoice_name, uploaded_docs, with_total_container, forced_ve
             # Hitung ulang sum dan berikan error total yang benar-benar akurat
             for inv_no, group_rows in rows_by_inv.items():
                 _validate_invoice_rows(group_rows)
-                _validate_packing_rows(group_rows, vendor_id=forced_vendor_id)
+                # [INV-ONLY] disabled: validasi PL.
+                # _validate_packing_rows(group_rows, vendor_id=forced_vendor_id)
             
             # Pastikan status final (TRUE/FALSE) sinkron dengan error terupdate
             _finalize_match_fields(merged_detail_rows)
@@ -13116,30 +13136,39 @@ def run_ocr(
 ):
     uploaded_pdf_paths = uploaded_pdf_paths or []
 
-    explicit_has_bl_doc = has_bl_doc is not None
-    explicit_has_coo_doc = has_coo_doc is not None
+    # [INV-ONLY] forced: hanya dokumen Invoice yang diproses.
+    # PL/BL/COO dinonaktifkan sementara; field-nya akan di-null-kan agar
+    # struktur skema & kolom CSV tetap utuh.
+    with_total_container = False
+    has_bl_doc = False
+    has_coo_doc = False
+    has_pl_doc = False
 
-    # Infer default untuk flow lama:
-    # urutan file legacy diasumsikan: invoice, packing, BL, COO
-    if has_bl_doc is None:
-        has_bl_doc = bool(with_total_container and len(uploaded_pdf_paths) >= 3)
-
-    if has_coo_doc is None:
-        has_coo_doc = bool(len(uploaded_pdf_paths) >= 4)
-
-    # Preserve guard lama hanya untuk flow legacy/non-explicit.
-    # Kalau caller explicit bilang file ke-3 adalah BL, jangan direject.
-    if (
-        not explicit_has_bl_doc
-        and not explicit_has_coo_doc
-        and len(uploaded_pdf_paths) == 3
-        and not with_total_container
-    ):
-        raise Exception("COO hanya bisa diproses jika Bill of Lading juga diupload.")
-
-    # Guard eksplisit: COO tidak boleh tanpa BL.
-    if has_coo_doc and not has_bl_doc:
-        raise Exception("COO hanya bisa diproses jika Bill of Lading juga diupload.")
+    # [INV-ONLY] disabled: inferensi & guard PL/BL/COO flow lama.
+    # explicit_has_bl_doc = has_bl_doc is not None
+    # explicit_has_coo_doc = has_coo_doc is not None
+    #
+    # # Infer default untuk flow lama:
+    # # urutan file legacy diasumsikan: invoice, packing, BL, COO
+    # if has_bl_doc is None:
+    #     has_bl_doc = bool(with_total_container and len(uploaded_pdf_paths) >= 3)
+    #
+    # if has_coo_doc is None:
+    #     has_coo_doc = bool(len(uploaded_pdf_paths) >= 4)
+    #
+    # # Preserve guard lama hanya untuk flow legacy/non-explicit.
+    # # Kalau caller explicit bilang file ke-3 adalah BL, jangan direject.
+    # if (
+    #     not explicit_has_bl_doc
+    #     and not explicit_has_coo_doc
+    #     and len(uploaded_pdf_paths) == 3
+    #     and not with_total_container
+    # ):
+    #     raise Exception("COO hanya bisa diproses jika Bill of Lading juga diupload.")
+    #
+    # # Guard eksplisit: COO tidak boleh tanpa BL.
+    # if has_coo_doc and not has_bl_doc:
+    #     raise Exception("COO hanya bisa diproses jika Bill of Lading juga diupload.")
 
     normalized_pdf_paths = []
     temp_local_paths = []
@@ -13167,9 +13196,9 @@ def run_ocr(
             if os.path.abspath(str(normalized)) != os.path.abspath(str(p)):
                 temp_local_paths.append(normalized)
 
-        # DETAIL: invoice+packing saja (2 file pertama dari UI)
-        if len(normalized_pdf_paths) < 2:
-            raise Exception("Minimal harus ada 2 file: invoice dan packing list.")
+        # [INV-ONLY] DETAIL: invoice saja (1 file pertama dari UI)
+        if len(normalized_pdf_paths) < 1:
+            raise Exception("Minimal harus ada 1 file: invoice.")
 
         # ==========================================
         # PREPROCESS HANYA INVOICE + PACKING LIST
@@ -13198,7 +13227,8 @@ def run_ocr(
                 "merge, kirim PDF multi-page asli ke Gemini."
             )
             invoice_onepage_pdf = normalized_pdf_paths[0]
-            packing_onepage_pdf = normalized_pdf_paths[1]
+            # [INV-ONLY] disabled: PL tidak diproses.
+            # packing_onepage_pdf = normalized_pdf_paths[1]
         else:
             invoice_onepage_pdf = _preprocess_invoice_or_pl_to_one_page(
                 normalized_pdf_paths[0],
@@ -13206,15 +13236,16 @@ def run_ocr(
             )
             temp_local_paths.append(invoice_onepage_pdf)
 
-            packing_onepage_pdf = _preprocess_invoice_or_pl_to_one_page(
-                normalized_pdf_paths[1],
-                "packing"
-            )
-            temp_local_paths.append(packing_onepage_pdf)
+            # [INV-ONLY] disabled: PL tidak diproses.
+            # packing_onepage_pdf = _preprocess_invoice_or_pl_to_one_page(
+            #     normalized_pdf_paths[1],
+            #     "packing"
+            # )
+            # temp_local_paths.append(packing_onepage_pdf)
 
         preprocessed_detail_inputs = [
             invoice_onepage_pdf,
-            packing_onepage_pdf,
+            # packing_onepage_pdf,  # [INV-ONLY] disabled
         ]
 
         # DETAIL: invoice + packing yang sudah di-merge jadi 1 page masing-masing
@@ -13231,15 +13262,14 @@ def run_ocr(
             name="detail"
         )
 
-        # PL-only URI untuk ekstraksi terfokus packing list (vendor merged-cell
-        # numerik, mis. novatec). Hanya di-upload bila vendornya butuh.
+        # [INV-ONLY] disabled: PL-only URI (ekstraksi terfokus packing list).
         file_uri_packing = None
-        if _is_pl_merged_numeric_vendor(normalize_vendor_id(forced_vendor_id)):
-            file_uri_packing = _upload_temp_pdf_to_gcs(
-                packing_onepage_pdf,
-                run_prefix,
-                name="packing"
-            )
+        # if _is_pl_merged_numeric_vendor(normalize_vendor_id(forced_vendor_id)):
+        #     file_uri_packing = _upload_temp_pdf_to_gcs(
+        #         packing_onepage_pdf,
+        #         run_prefix,
+        #         name="packing"
+        #     )
 
         file_uri_full = None
         file_uri_container_bl = None
@@ -13255,7 +13285,7 @@ def run_ocr(
         if has_extra_docs:
             full_input_paths = [
                 invoice_onepage_pdf,
-                packing_onepage_pdf,
+                # packing_onepage_pdf,  # [INV-ONLY] disabled
             ] + normalized_pdf_paths[2:]
 
             merged_pdf_full = _merge_pdfs(full_input_paths)
@@ -13354,6 +13384,7 @@ def run_ocr(
             header_obj=header_obj,
             has_bl_doc=has_bl_doc,
             has_coo_doc=has_coo_doc,
+            has_pl_doc=has_pl_doc,  # [INV-ONLY] added: null-kan pl_*
         )
 
         # GET TOTAL ROW FROM GEMINI
@@ -13557,18 +13588,19 @@ def run_ocr(
         # GRAND TOTAL — panggil Gemini 1x dengan prompt super-fokus
         # supaya pilih yang benar. Bounded 1 retry, tidak ada loop.
         # =========================================
-        if normalize_vendor_id(vendor_id) == "karet_deli":
-            _karet_deli_refocus_pl_total_quantity(
-                file_uri=base_detail_input_uri,
-                all_rows=all_rows,
-                base_header_obj=base_header_obj,
-                vendor_id=vendor_id,
-            )
-            # Sinkronkan header_obj kalau base_header_obj sudah di-update.
-            # _merge_optional_header_into_base_header tidak override pl_*,
-            # jadi header_obj juga harus disinkronkan manual.
-            if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
-                header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
+        # [INV-ONLY] disabled: refocus pl_total_quantity (PL-specific) untuk karet_deli.
+        # if normalize_vendor_id(vendor_id) == "karet_deli":
+        #     _karet_deli_refocus_pl_total_quantity(
+        #         file_uri=base_detail_input_uri,
+        #         all_rows=all_rows,
+        #         base_header_obj=base_header_obj,
+        #         vendor_id=vendor_id,
+        #     )
+        #     # Sinkronkan header_obj kalau base_header_obj sudah di-update.
+        #     # _merge_optional_header_into_base_header tidak override pl_*,
+        #     # jadi header_obj juga harus disinkronkan manual.
+        #     if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
+        #         header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
 
         # =========================================
         # PRECHECK PYTHON
@@ -13703,6 +13735,7 @@ def run_ocr(
             header_obj=header_obj,
             has_bl_doc=has_bl_doc,
             has_coo_doc=has_coo_doc,
+            has_pl_doc=has_pl_doc,  # [INV-ONLY] added: null-kan pl_*
         )
 
         # =========================
@@ -13725,9 +13758,10 @@ def run_ocr(
         # FLOW VALIDASI FINAL LAMA TETAP JALAN
         # =========================================
         _apply_header_to_rows(all_rows, header_obj, vendor_id=vendor_id)
-        _postprocess_pl_volume(all_rows, vendor_id=vendor_id)
-        _postprocess_pl_package_unit(all_rows, vendor_id=vendor_id)
-        _postprocess_package_unit_fields(all_rows)
+        # [INV-ONLY] disabled: post-processing PL.
+        # _postprocess_pl_volume(all_rows, vendor_id=vendor_id)
+        # _postprocess_pl_package_unit(all_rows, vendor_id=vendor_id)
+        # _postprocess_package_unit_fields(all_rows)
 
         _reset_match_fields(all_rows)
 
@@ -13802,12 +13836,14 @@ def run_ocr(
             header_obj=header_obj,
             has_bl_doc=has_bl_doc,
             has_coo_doc=has_coo_doc,
+            has_pl_doc=has_pl_doc,  # [INV-ONLY] added: null-kan pl_*
         )
 
+        # [INV-ONLY] disabled: derive inv_quantity/inv_amount dari pl_quantity.
         # Vendor merged-cell (mis. joy): turunkan inv_quantity/inv_amount per-baris
         # dari pl_quantity SEBELUM mapping, supaya total invoice rekonsiliasi dan
         # tiap baris bisa di-map ke PO line-nya masing-masing.
-        all_rows = _derive_inv_qty_from_pl_for_merged_vendors(all_rows, vendor_id=vendor_id)
+        # all_rows = _derive_inv_qty_from_pl_for_merged_vendors(all_rows, vendor_id=vendor_id)
 
         # Vendor PL merged-cell numerik (mis. novatec): ekstraksi terfokus PL-only
         # + assignment deterministik (agregat-per-group ke baris teratas, 0 di
@@ -13825,11 +13861,13 @@ def run_ocr(
 
         all_rows = _map_po_to_details(po_lines, all_rows, vendor_id=vendor_id)
 
-        all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
+        # [INV-ONLY] disabled: deduplikasi numerik PL.
+        # all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
 
         all_rows = _generate_inv_amount_before_validation(all_rows)
 
-        _postprocess_bl_coo_zero_to_null(all_rows)
+        # [INV-ONLY] disabled: post-processing zero->null BL/COO.
+        # _postprocess_bl_coo_zero_to_null(all_rows)
         _postprocess_invoice_no_consensus(all_rows)
 
         if has_bl_doc:
@@ -13857,6 +13895,7 @@ def run_ocr(
             header_obj=header_obj,
             has_bl_doc=has_bl_doc,
             has_coo_doc=has_coo_doc,
+            has_pl_doc=has_pl_doc,  # [INV-ONLY] added: null-kan pl_*
         )
         
         _postprocess_null_fields_for_vendor(
@@ -13908,15 +13947,16 @@ def run_ocr(
             columns=["inv_total_quantity", "pl_total_package"],
         )
  
-        if _is_coo_aggregate_top_row_vendor(vendor_id):
-            # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
-            # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
-            # COO. Jangan distribusi per-baris mengikuti PL.
-            _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
-        elif normalize_vendor_id(vendor_id) != "liow_ko":
-            _postprocess_coo_numeric_fields_from_pl(all_rows)
-        else:
-            print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
+        # [INV-ONLY] disabled: post-processing numerik COO (berbasis PL/COO).
+        # if _is_coo_aggregate_top_row_vendor(vendor_id):
+        #     # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
+        #     # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
+        #     # COO. Jangan distribusi per-baris mengikuti PL.
+        #     _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
+        # elif normalize_vendor_id(vendor_id) != "liow_ko":
+        #     _postprocess_coo_numeric_fields_from_pl(all_rows)
+        # else:
+        #     print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
 
         # JOY: setelah PO mapping, ringkas inv_quantity/inv_amount merged-cell
         # ke baris teratas group (mis. 480/0/0/0), sesuai dokumen invoice.
@@ -13930,8 +13970,9 @@ def run_ocr(
         _kunshan_landon_realign_descriptions(all_rows, vendor_id)
 
         _validate_invoice_rows(all_rows)
-        _validate_packing_rows(all_rows, vendor_id=vendor_id)
-        _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
+        # [INV-ONLY] disabled: validasi PL & cross-check INV-vs-PL.
+        # _validate_packing_rows(all_rows, vendor_id=vendor_id)
+        # _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
 
         if has_bl_doc:
             _validate_bl_rows(all_rows)
@@ -13988,6 +14029,7 @@ def run_ocr(
             container_rows=container_data,
             has_bl_doc=has_bl_doc,
             has_coo_doc=has_coo_doc,
+            has_pl_doc=has_pl_doc,  # [INV-ONLY] added: null-kan pl_*
         )
 
         all_rows = _finalize_audit_confidence_labels(

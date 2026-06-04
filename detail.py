@@ -266,14 +266,13 @@ DETAIL_LINE_NUM_FIELDS = {
 def build_index_prompt(total_row: int) -> str:
     return f"""
 ROLE:
-Anda adalah AI IDP professional yang fokus membuat INDEX line items berbasis DUA SUMBER:
-1) Invoice
-2) Packing List (PL)
+Anda adalah AI IDP professional yang fokus membuat INDEX line items berbasis Invoice.
+# [INV-ONLY] Hanya dokumen Invoice yang disediakan. Packing List (PL) TIDAK disediakan.
 
 Rule-based, deterministik, anti-halusinasi.
 
 TUGAS:
-Buat daftar INDEX untuk SEMUA line item dengan anchor utama dari Invoice dan anchor pendukung dari Packing List.
+Buat daftar INDEX untuk SEMUA line item dengan anchor utama dari Invoice.
 INDEX ini akan dipakai sebagai "anchor" untuk ekstraksi detail batch berikutnya.
 
 ATURAN:
@@ -283,8 +282,9 @@ ATURAN:
 4) DILARANG markdown / plan / penjelasan.
 5) Jika suatu field tidak ada di dokumen → isi "null" (string) atau 0 (angka).
 6) Invoice adalah anchor utama untuk identitas row.
-7) Packing List adalah anchor pendukung untuk membantu memilih pasangan row PL yang paling cocok.
-8) PL TIDAK BOLEH membuat row baru.
+7) [INV-ONLY] Packing List TIDAK disediakan → seluruh field pl_* WAJIB diisi "null" (string) atau 0 (angka).
+# 7) Packing List adalah anchor pendukung untuk membantu memilih pasangan row PL yang paling cocok.
+# 8) PL TIDAK BOLEH membuat row baru.
 9) Jangan ikutkan BL / COO ke index.
 
 SCHEMA OUTPUT (INDEX):
@@ -329,12 +329,13 @@ CONTOH ANCHOR TRIO (3 item pertama dari invoice 2-halaman):
 
 CATATAN:
 - inv_* anchor diambil dari Invoice.
-- pl_* anchor diambil dari Packing List.
-- Jika pasangan row PL tidak ditemukan dengan yakin, isi field pl_* dengan "null"/0.
-- Satu anchor invoice boleh memiliki lebih dari satu kandidat sub-row pada Packing List.
-- Jika Packing List memecah 1 item menjadi beberapa sub-row, maka pl_quantity pada anchor
-  HARUS merepresentasikan total agregat semua sub-row yang masih item yang sama,
-  bukan hanya quantity dari sub-row pertama.
+# [INV-ONLY] PL tidak disediakan; seluruh pl_* = "null"/0.
+# - pl_* anchor diambil dari Packing List.
+# - Jika pasangan row PL tidak ditemukan dengan yakin, isi field pl_* dengan "null"/0.
+# - Satu anchor invoice boleh memiliki lebih dari satu kandidat sub-row pada Packing List.
+# - Jika Packing List memecah 1 item menjadi beberapa sub-row, maka pl_quantity pada anchor
+#   HARUS merepresentasikan total agregat semua sub-row yang masih item yang sama,
+#   bukan hanya quantity dari sub-row pertama.
 - Jangan menganggap perubahan CTN NO / carton range sebagai item baru
   jika description / item_no / PO masih konsisten.
 - Row TOTAL/SUBTOTAL tidak boleh dijumlahkan bersama detail row yang sama karena akan menyebabkan double count.
@@ -460,9 +461,10 @@ Rule-based, deterministik, anti-halusinasi.
 TUGAS:
 Ekstrak HEADER (doc-level) dari dokumen yang tersedia:
 1) Invoice (wajib)
-2) Packing List (wajib)
-3) Bill of Lading (opsional)
-4) COO (opsional)
+# [INV-ONLY] Hanya dokumen Invoice yang disediakan.
+# 2) Packing List (wajib)
+# 3) Bill of Lading (opsional)
+# 4) COO (opsional)
 
 ATURAN:
 1) Output HANYA 1 JSON OBJECT, tanpa teks lain.
@@ -470,6 +472,7 @@ ATURAN:
 3) Tidak boleh JSON literal null → gunakan string "null".
 4) Format tanggal: YYYY-MM-DD.
 5) Jika dokumen tidak ada → semua field prefix dokumen tersebut = "null".
+6) [INV-ONLY] Packing List, Bill of Lading, dan COO TIDAK disediakan → SEMUA field pl_*, bl_*, dan coo_* WAJIB diisi "null" (string) atau 0 (angka). Ekstrak HANYA field inv_*.
 
 OUTPUT SCHEMA (HEADER ONLY):
 {
@@ -847,16 +850,17 @@ Saya berikan "ANCHOR INDEX" untuk item yang harus Anda ekstrak.
 Anda WAJIB mengembalikan output HANYA untuk index berikut:
 {anchors_json}
 
-- Anchor terdiri dari dua sumber:
- 1) Invoice anchor (utama)
- 2) PL anchor (pendukung)
+- Anchor berasal dari Invoice (utama).
+ # [INV-ONLY] Packing List TIDAK disediakan.
+ # 2) PL anchor (pendukung)
 
 - Invoice anchor digunakan untuk menjaga identitas row:
  inv_invoice_no, inv_customer_po_no, inv_spart_item_no, inv_description, inv_quantity, inv_quantity_unit, inv_unit_price, inv_price_unit, inv_amount.
 
 - Field inv_invoice_no WAJIB selalu ada di setiap row output dan nilainya HARUS sama persis dengan inv_invoice_no pada anchor row yang bersesuaian.
-- PL anchor digunakan sebagai bukti pendukung agar model memilih pasangan row Packing List yang benar:
- pl_customer_po_no, pl_description, pl_quantity.
+- [INV-ONLY] Packing List TIDAK disediakan → seluruh field pl_* WAJIB diisi "null"/0.
+# - PL anchor digunakan sebagai bukti pendukung agar model memilih pasangan row Packing List yang benar:
+#  pl_customer_po_no, pl_description, pl_quantity.
 
 ATURAN:
 - EKSTRAK HANYA YANG TERTULIS. JANGAN MENGARANG.

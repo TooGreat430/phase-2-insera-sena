@@ -297,9 +297,13 @@ if menu == "Upload":
     st.subheader("Upload Documents")
     
     invoice = st.file_uploader("Invoice*", type=["pdf", "xlsx", "xls", "csv"], accept_multiple_files=True)
-    packing = st.file_uploader("Packing List*", type=["pdf", "xlsx", "xls", "csv"], accept_multiple_files=True)
-    bl = st.file_uploader("Bill of Lading", type=["pdf", "xlsx", "xls", "csv"])
-    coo = st.file_uploader("COO", type=["pdf", "xlsx", "xls", "csv"], accept_multiple_files=True)
+    # [INV-ONLY] disabled: hanya dokumen Invoice yang diproses sementara.
+    # packing = st.file_uploader("Packing List*", type=["pdf", "xlsx", "xls", "csv"], accept_multiple_files=True)
+    # bl = st.file_uploader("Bill of Lading", type=["pdf", "xlsx", "xls", "csv"])
+    # coo = st.file_uploader("COO", type=["pdf", "xlsx", "xls", "csv"], accept_multiple_files=True)
+    packing = None
+    bl = None
+    coo = None
 
     st.markdown("### Vendor")
 
@@ -323,31 +327,21 @@ if menu == "Upload":
     if st.button("Extract"):
 
         invoice_files = invoice or []
-        packing_files = packing or []
-        coo_files = coo or []
+        # [INV-ONLY] disabled: PL/COO tidak diproses.
+        # packing_files = packing or []
+        # coo_files = coo or []
 
         if not selected_vendor_id:
             st.warning("Vendor wajib dipilih sebelum Extract.")
             st.stop()
 
-        if not invoice_files or not packing_files:
-            st.warning("Invoice dan Packing List wajib diupload")
+        if not invoice_files:
+            st.warning("Invoice wajib diupload")
 
         else:
-            has_bl = bool(bl)
-            has_coo = bool(coo_files)
-            with_total_container = has_bl
-
-            if has_coo and not has_bl:
-                st.error("COO hanya bisa diproses jika Bill of Lading juga diupload.")
-                st.stop()
-
-            if not has_bl and not has_coo:
-                st.info("Hanya Invoice dan Packing List yang diupload. Sistem akan menghasilkan DETAIL saja.")
-            elif has_bl and not has_coo:
-                st.info("Bill of Lading terdeteksi tanpa COO. Sistem akan tetap menghasilkan DETAIL, TOTAL, dan CONTAINER.")
-            elif has_bl and has_coo:
-                st.info("Dokumen lengkap terdeteksi. Sistem akan menghasilkan DETAIL, TOTAL, dan CONTAINER.")
+            # [INV-ONLY] forced: total/container butuh BL, dimatikan sementara.
+            with_total_container = False
+            st.info("Mode INV-only: hanya Invoice yang diproses. Sistem akan menghasilkan DETAIL.")
 
             pdf_paths = []
             temp_cleanup_paths = []
@@ -356,26 +350,28 @@ if menu == "Upload":
                 invoice_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list(invoice_files)
                 temp_cleanup_paths.extend(created_paths)
 
-                packing_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list(packing_files)
-                temp_cleanup_paths.extend(created_paths)
-
-                bl_pdf_path = None
-                if bl:
-                    bl_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list([bl])
-                    temp_cleanup_paths.extend(created_paths)
-                    bl_pdf_path = bl_pdf_paths[0] if bl_pdf_paths else None
-
-                coo_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list(coo_files)
-                temp_cleanup_paths.extend(created_paths)
+                # [INV-ONLY] disabled: prep PL/BL/COO.
+                # packing_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list(packing_files)
+                # temp_cleanup_paths.extend(created_paths)
+                #
+                # bl_pdf_path = None
+                # if bl:
+                #     bl_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list([bl])
+                #     temp_cleanup_paths.extend(created_paths)
+                #     bl_pdf_path = bl_pdf_paths[0] if bl_pdf_paths else None
+                #
+                # coo_pdf_paths, created_paths = _prepare_uploaded_files_as_pdf_list(coo_files)
+                # temp_cleanup_paths.extend(created_paths)
 
                 base_name = os.path.splitext(invoice_files[0].name)[0]
                 final_invoice_name = (output_name or "").strip() or base_name
 
                 payload = {
                     "invoice_paths": invoice_pdf_paths,
-                    "packing_paths": packing_pdf_paths,
-                    "bl_path": bl_pdf_path,
-                    "coo_paths": coo_pdf_paths,
+                    # [INV-ONLY] disabled: PL/BL/COO tidak dikirim ke pipeline.
+                    # "packing_paths": packing_pdf_paths,
+                    # "bl_path": bl_pdf_path,
+                    # "coo_paths": coo_pdf_paths,
                     "forced_vendor_id": selected_vendor_id,
                 }
 
@@ -465,7 +461,7 @@ if menu == "Report":
     # =========================
     report_type = st.selectbox(
         "Pilih Report",
-        ["detail", "total", "container"],
+        ["detail"],  # [INV-ONLY] total/container dimatikan (butuh BL)
         key="report_type"
     )
 
