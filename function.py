@@ -61,11 +61,12 @@ DETAIL_RECHECK_SCHEMA = {
     "inv_unit_price": "number",
     "inv_amount": "number",
 
-    "pl_quantity": "number",
-    "pl_package_count": "number",
-    "pl_nw": "number",
-    "pl_gw": "number",
-    "pl_volume": "number",
+    # [INV-ONLY] disabled: recheck field PL (kolom pl_* tidak dipakai).
+    # "pl_quantity": "number",
+    # "pl_package_count": "number",
+    # "pl_nw": "number",
+    # "pl_gw": "number",
+    # "pl_volume": "number",
 }
 DETAIL_RECHECK_FIELDS = list(DETAIL_RECHECK_SCHEMA.keys())
 DETAIL_RECHECK_NUM_FIELDS = {
@@ -11742,9 +11743,10 @@ def _run_detail_precheck_pass(rows: list, header_obj: dict, vendor_id: str = "de
     _ensure_all_detail_keys(rows)
 
     _apply_header_to_rows(rows, header_obj if isinstance(header_obj, dict) else {}, vendor_id=vendor_id)
-    _postprocess_package_unit_fields(rows)
-    _postprocess_pl_package_unit(rows, vendor_id=vendor_id)
-    _postprocess_pl_volume(rows, vendor_id=vendor_id)
+    # [INV-ONLY] disabled: post-processing PL (menambah kolom pl_package_unit/pl_volume).
+    # _postprocess_package_unit_fields(rows)
+    # _postprocess_pl_package_unit(rows, vendor_id=vendor_id)
+    # _postprocess_pl_volume(rows, vendor_id=vendor_id)
 
     _reset_match_fields(rows)
 
@@ -11758,27 +11760,31 @@ def _run_detail_precheck_pass(rows: list, header_obj: dict, vendor_id: str = "de
     _postprocess_inv_description(rows)
     _postprocess_item_no_fields(rows)
     _postprocess_unit_fields(rows)
-    _postprocess_coo_description(rows)
+    # [INV-ONLY] disabled: post-processing COO (menambah kolom coo_seq dll.).
+    # _postprocess_coo_description(rows)
+    #
+    # _postprocess_coo_item_mapping(rows)
+    # _postprocess_coo_po_only_rows_from_invoice(rows, vendor_id=vendor_id)
+    # _postprocess_coo_no_and_seq(rows)
 
-    _postprocess_coo_item_mapping(rows)
-    _postprocess_coo_po_only_rows_from_invoice(rows, vendor_id=vendor_id)
-    _postprocess_coo_no_and_seq(rows)
+    # [INV-ONLY] disabled: post-processing BL.
+    # _postprocess_bl_description(rows, vendor_id=vendor_id)
+    # _postprocess_bl_seller_name_similarity(rows)
 
-    _postprocess_bl_description(rows, vendor_id=vendor_id)
-    _postprocess_bl_seller_name_similarity(rows)
+    # [INV-ONLY] disabled: post-processing zero->null BL/COO & numerik COO dari PL.
+    # _postprocess_bl_coo_zero_to_null(rows)
+    #
+    # if normalize_vendor_id(vendor_id) != "liow_ko":
+    #     _postprocess_coo_numeric_fields_from_pl(rows)
+    # else:
+    #     print("[COO_NUMERIC_FROM_PL][PRECHECK] skipped for vendor liow_ko")
 
-    _postprocess_bl_coo_zero_to_null(rows)
-
-    if normalize_vendor_id(vendor_id) != "liow_ko":
-        _postprocess_coo_numeric_fields_from_pl(rows)
-    else:
-        print("[COO_NUMERIC_FROM_PL][PRECHECK] skipped for vendor liow_ko")
-        
     _validate_invoice_rows(rows)
-    _validate_packing_rows(rows, vendor_id=vendor_id)
-    _validate_invoice_vs_packing_extra(rows, vendor_id=vendor_id)
-    _validate_bl_rows(rows)
-    _validate_coo_rows(rows)
+    # [INV-ONLY] disabled: validasi PL/BL/COO (mencegah noise "missing pl_*/bl_*/coo_*").
+    # _validate_packing_rows(rows, vendor_id=vendor_id)
+    # _validate_invoice_vs_packing_extra(rows, vendor_id=vendor_id)
+    # _validate_bl_rows(rows)
+    # _validate_coo_rows(rows)
 
     _finalize_match_fields(rows)
     return rows
@@ -13586,18 +13592,19 @@ def run_ocr(
         # GRAND TOTAL — panggil Gemini 1x dengan prompt super-fokus
         # supaya pilih yang benar. Bounded 1 retry, tidak ada loop.
         # =========================================
-        if normalize_vendor_id(vendor_id) == "karet_deli":
-            _karet_deli_refocus_pl_total_quantity(
-                file_uri=base_detail_input_uri,
-                all_rows=all_rows,
-                base_header_obj=base_header_obj,
-                vendor_id=vendor_id,
-            )
-            # Sinkronkan header_obj kalau base_header_obj sudah di-update.
-            # _merge_optional_header_into_base_header tidak override pl_*,
-            # jadi header_obj juga harus disinkronkan manual.
-            if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
-                header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
+        # [INV-ONLY] disabled: refocus pl_total_quantity (PL-specific) untuk karet_deli.
+        # if normalize_vendor_id(vendor_id) == "karet_deli":
+        #     _karet_deli_refocus_pl_total_quantity(
+        #         file_uri=base_detail_input_uri,
+        #         all_rows=all_rows,
+        #         base_header_obj=base_header_obj,
+        #         vendor_id=vendor_id,
+        #     )
+        #     # Sinkronkan header_obj kalau base_header_obj sudah di-update.
+        #     # _merge_optional_header_into_base_header tidak override pl_*,
+        #     # jadi header_obj juga harus disinkronkan manual.
+        #     if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
+        #         header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
 
         # =========================================
         # PRECHECK PYTHON
@@ -13858,11 +13865,13 @@ def run_ocr(
 
         all_rows = _map_po_to_details(po_lines, all_rows, vendor_id=vendor_id)
 
-        all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
+        # [INV-ONLY] disabled: deduplikasi numerik PL.
+        # all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
 
         all_rows = _generate_inv_amount_before_validation(all_rows)
 
-        _postprocess_bl_coo_zero_to_null(all_rows)
+        # [INV-ONLY] disabled: post-processing zero->null BL/COO.
+        # _postprocess_bl_coo_zero_to_null(all_rows)
         _postprocess_invoice_no_consensus(all_rows)
 
         if has_bl_doc:
@@ -13942,15 +13951,16 @@ def run_ocr(
             columns=["inv_total_quantity", "pl_total_package"],
         )
  
-        if _is_coo_aggregate_top_row_vendor(vendor_id):
-            # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
-            # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
-            # COO. Jangan distribusi per-baris mengikuti PL.
-            _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
-        elif normalize_vendor_id(vendor_id) != "liow_ko":
-            _postprocess_coo_numeric_fields_from_pl(all_rows)
-        else:
-            print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
+        # [INV-ONLY] disabled: post-processing numerik COO (berbasis PL/COO).
+        # if _is_coo_aggregate_top_row_vendor(vendor_id):
+        #     # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
+        #     # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
+        #     # COO. Jangan distribusi per-baris mengikuti PL.
+        #     _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
+        # elif normalize_vendor_id(vendor_id) != "liow_ko":
+        #     _postprocess_coo_numeric_fields_from_pl(all_rows)
+        # else:
+        #     print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
 
         # JOY: setelah PO mapping, ringkas inv_quantity/inv_amount merged-cell
         # ke baris teratas group (mis. 480/0/0/0), sesuai dokumen invoice.
@@ -13964,8 +13974,9 @@ def run_ocr(
         _kunshan_landon_realign_descriptions(all_rows, vendor_id)
 
         _validate_invoice_rows(all_rows)
-        _validate_packing_rows(all_rows, vendor_id=vendor_id)
-        _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
+        # [INV-ONLY] disabled: validasi PL & cross-check INV-vs-PL.
+        # _validate_packing_rows(all_rows, vendor_id=vendor_id)
+        # _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
 
         if has_bl_doc:
             _validate_bl_rows(all_rows)
