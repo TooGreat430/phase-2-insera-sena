@@ -1,0 +1,12 @@
+streamlit==1.54.0
+google-generativeai
+PyPDF2
+reportlab
+vertexai
+google-genai
+ijson
+openpyxl
+google-cloud-storage
+streamlit-autorefresh
+weasyprint
+PyMuPDF

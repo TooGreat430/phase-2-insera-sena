@@ -1,0 +1,144 @@
+JHT_PROMPT = """
+INVOICE (INV):
+1. `inv_customer_po_no`: Ekstrak dari teks referensi awalan "PO:" yang berada sebelum/di atas list barang (misalnya "PO:45326462").
+2. `inv_spart_item_no`: Ekstrak dari kolom ke-dua dari kiri (di sebelah kanan 'Shipping Marks' dan di sebelah kiri 'Description of Goods').
+3. `inv_description`: 
+    - Ekstrak deskripsi spesifikasi lengkap barang dari kolom "DESCRIPTION OF GOODS" (Abaikan yang sifatnya code, part number, atau serial number).
+    - Contoh:
+    DESCRIPTION OF GOODS:RIM, HLQC-GA63-1,  DOUBLE WALL BLACK  20*1.5 AV  32H W/ SAFETY LINE W/O DECAL,RIMJE20HLQCGA005
+    Maka inv_description adalah DOUBLE WALL BLACK  20*1.5 AV  32H W/ SAFETY LINE W/O DECAL.
+4. `inv_gw` & `inv_gw_unit`: Biarkan null kecuali dinyatakan secara eksplisit di baris tersebut.
+5. `inv_quantity`: Ekstrak nilai angka dari kolom "Quantity".
+6. `inv_quantity_unit`: Ekstrak unit dari kolom "Quantity" yang letaknya di samping angka (misalnya "PCS").
+7. `inv_unit_price`: Ekstrak nilai angka dari kolom "Unit Price" (secara posisi sejajar ke bawah).
+8. `inv_amount`: 
+    - Ekstrak nilai angka dari kolom "Amount" (secara posisi sejajar ke bawah).
+    - Apabila terdapat value 'FOC' pada kolom "Amount", maka inv_amount HARUS 0.
+
+PACKING LIST (PL):
+1. `pl_customer_po_no`: Ekstrak dari teks referensi awalan "PO:" (misalnya "PO:45326462").
+2. `pl_item_no`: 
+    - Ekstrak kode barang unik jika tercantum di dalam teks "DESCRIPTION OF GOODS" dan terletak di sebelah paling kanan.
+    - Contoh:
+    DESCRIPTION OF GOODS:RIM, HLQC-GA63-1,  DOUBLE WALL BLACK  20*1.5 AV  32H W/ SAFETY LINE W/O DECAL,RIMJE20HLQCGA005
+    Maka pl_item_no adalah RIMJE20HLQCGA005 (bukan HLQC-GA63-1).
+3. `pl_description`:
+    - Ekstrak deskripsi spesifikasi lengkap barang dari kolom "DESCRIPTION OF GOODS" (Abaikan yang sifatnya code, part number, atau serial number).
+    - Contoh:
+    DESCRIPTION OF GOODS:RIM, HLQC-GA63-1,  DOUBLE WALL BLACK  20*1.5 AV  32H W/ SAFETY LINE W/O DECAL,RIMJE20HLQCGA005
+    Maka pl_description adalah DOUBLE WALL BLACK  20*1.5 AV  32H W/ SAFETY LINE W/O DECAL.
+4. `pl_quantity`: Ekstrak nilai angka dari kolom "QTY".
+5. `pl_package_unit`: Apabila tidak ada kolom unit kemasan yang spesifik dan tidak ada clue package unit seperti: "Carton/CTN/CTN/CT", "Pallet/plt", "Bal/Bale", "PXCT/PK"  dll, maka return null.
+6. `pl_package_count`: 
+    - Ekstrak nilai angka jumlah kemasan spesifik per item dari kolom "PACKING" (misalnya angka "20").
+    - Apabila ada beberapa line item yang tergabung dalam satu AMOUNT (amount) merged-cell, maka AMOUNT yang tertera adalah untuk line item dalam group tersebut yang paling atas, dan sisanya 0.
+        Contoh:
+        |   ITEM  |  PACKING PKGS    |
+        |   A     |                  |
+        |         |        20        |
+        |   B     |                  |
+        Maka:
+        - Line item A: amount = 20
+        - Line item B: amount = 0 dan BUKAN 20
+7. `pl_nw`: 
+    - Ekstrak nilai angka dari kolom "N.W. KGS" dan BUKAN "N.W./PKGS".
+    - Apabila ada beberapa line item yang tergabung dalam satu AMOUNT (amount) merged-cell, maka AMOUNT yang tertera adalah untuk line item dalam group tersebut yang paling atas, dan sisanya 0.
+        Contoh:
+        |   ITEM  |  NW KGS    |
+        |   A     |            |
+        |         |     5      |
+        |   B     |            |
+        Maka:
+        - Line item A: amount = 5
+        - Line item B: amount = 0 dan BUKAN 5
+8. `pl_gw`: 
+    - Ekstrak nilai angka dari kolom "G.W. KGS" dan BUKAN "G.W./PKGS".
+    - Apabila ada beberapa line item yang tergabung dalam satu AMOUNT (amount) merged-cell, maka AMOUNT yang tertera adalah untuk line item dalam group tersebut yang paling atas, dan sisanya 0.
+        Contoh:
+        |   ITEM  |  GW KGS    |
+        |   A     |            |
+        |         |     6      |
+        |   B     |            |
+        Maka:
+        - Line item A: amount = 6
+        - Line item B: amount = 0 dan BUKAN 6
+9. `pl_volume`: 
+    - Ekstrak nilai angka dari kolom volume "VOL/PKGS" yang kemudian di-KALIKAN dengan value pl_package_count line tersebut.
+        Contoh:
+        Packing PKGS: 20
+        VOL/PKGS: 0.05
+        Maka pl_volume untuk line item tersebut adalah 20 * 0.05 = 1.00.
+    - Apabila ada beberapa line item yang tergabung dalam satu AMOUNT (amount) merged-cell, maka AMOUNT yang tertera adalah untuk line item dalam group tersebut yang paling atas, dan sisanya 0.
+        Contoh:
+        |   ITEM  |     PACKING PKGS   |    VOL/KGS  |
+        |   A     |                    |             |
+        |         |         20         |     0.05    |
+        |   B     |                    |             |
+        Maka:
+        - Line item A: amount = 0.05 * 20 = 1.00
+        - Line item B: amount = 0 dan BUKAN 1.00 ataupun 0.05
+
+BILL OF LADING (BL):
+1. `bl_description`: 
+    - bl_description DILARANG KERAS untuk diisi null.
+    - Dimapping dengan inv_description berdasarkan kemiripan. Jika inv_description tidak exist pada dokumen BL, maka PILIH SALAH SATU ITEM RANDOM YANG SEKIRANYA PALING MIRIP.
+    Contoh:
+    Pada inv_description ada value:
+    RIM, HLQC-GA63-1
+    RIM, HLQC-08A
+    RIM, HLQC-23Y
+    RIM, HLQC-08A
+    RIM, HLQC-23Y
+    RIM, HLQC-04
+
+    Pada BL ada deskripsi item:
+    RIM, HLQC-08A
+    RIM, HLQC-23Y
+    BASKET
+    CARRIER
+    FORK END
+
+    Maka mapping value bl_desriptionnya adalah:
+    [PILIH SECARA RANDOM YANG SEKIRANYA PALING MIRIP]
+    RIM, HLQC-08A
+    RIM, HLQC-23Y
+    RIM, HLQC-08A
+    RIM, HLQC-23Y
+    [PILIH SECARA RANDOM YANG SEKIRANYA PALING MIRIP]
+
+2. `bl_hs_code`: 
+    - Value bl_hs_code diisi sesuai dengan bl_descriptionnya
+        Contoh:
+        FRAME PART A-F3306-1 HS NUMBER: 8714.91
+        FRAME PART A-HG009 HS NUMBER: 8714.91
+        FRAME PART A-HG011 HS NUMBER: 8714.91
+        FRAME PART A-HG045 HS NUMBER: 8714.91
+        FRAME TUBING HS NUMBER: 8714.91
+
+        Maka:
+        Pada inv_description ada value FRAME PART AF-9F-0270 (which is tidak ada), maka bl_description isi null saja.
+        Pada inv_description ada value FRAME PART A-HG009 (which is ada), maka bl_description isi FRAME PART A-HG009.
+        bl_hs_code untuk FRAME PART A-HG009 adalah 8714.91, maka bl_hs_code isi 8714.91.
+    - Hanya boleh mengambil dari dokumen Bill Of Lading (BL), TIDAK BOLEH dari dokumen yang lain.
+
+CERTIFICATE OF ORIGIN (COO):
+1. `coo_seq`:
+   - Ambil dari kolom "Item number".
+   - Nilai numeric.
+   - Item number tercetak jelas seperti:
+     - 1
+     - 2
+     - 3
+     - ...
+2. `coo_mark_number`: 
+    - Ekstrak dari "7. Marks and numbers on packages".
+    - Apabila tidak ada informasi marks and numbers pada kolom 7 atau tertlulis "N/M" (Not Mentioned), maka biarkan null.
+3. `coo_description`: Ekstrak deskripsi teks dari kolom "8. Number and kind of packages; and description of goods." Abaikan keterangan jumlah paket (angka dan kata) pada field ini.
+4. `coo_hs_code`: Ekstrak dari "9. HS Code of the goods".
+5. `coo_package_count`: Ekstrak kata/angka numerik dari kalimat awal di kolom 8 (misalnya, dari "TWENTY (20) PKGS" ambil angka 20).
+6. `coo_package_unit`: Ekstrak jenis kemasan dari kalimat awal di kolom 8 (misalnya, "PKGS").
+7. `coo_gw` & `coo_quantity`: Ekstrak berat angka dari kolom "12. Quantity...".
+8. `coo_unit`: Ekstrak unit berat dari kolom 12 (misalnya, "KG").
+9. `coo_criteria`: Ekstrak dari "10. Origin Conferring Criterion" (misalnya "PE").
+10. `coo_customer_po_no`: Biarkan null kecuali ada referensi nomor PO yang secara spesifik ditulis dalam kolom 7 atau 8.
+"""

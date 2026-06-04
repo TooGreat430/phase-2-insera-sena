@@ -1,2 +1,2 @@
-# phase-2-insera-sena
-Phase 2 OCR Insera Sena
+# insera-sena-ocr-ui
+For IDP Project Purposes
