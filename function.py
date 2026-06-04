@@ -13229,6 +13229,11 @@ def run_ocr(
             "shimano_inc",
             "shimano_singapore",
             "karet_deli",
+            # haomeng: invoice multi-halaman & sangat repetitif. One-page merge
+            # mematikan anchor page/page_index sehingga index pass kehilangan posisi
+            # (blok ter-duplikat + blok ter-skip). Kirim PDF multi-page asli supaya
+            # self-check anchor trio di index prompt berfungsi. Isolated ke haomeng.
+            "haomeng",
         }
 
         if _skip_onepage_preprocess:
