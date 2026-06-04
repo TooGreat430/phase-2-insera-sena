@@ -77,6 +77,9 @@ DETAIL_RECHECK_NUM_FIELDS = {
 def _is_shimano_inc_vendor(vendor_id: str = "default") -> bool:
     return normalize_vendor_id(vendor_id) == "shimano_inc"
 
+def _is_fox_vendor(vendor_id: str = "default") -> bool:
+    return normalize_vendor_id(vendor_id) == "fox"
+
 def _is_recheck_label_only_vendor(vendor_id: str = "default") -> bool:
     return normalize_vendor_id(vendor_id) in {
         "jht_carbon",
@@ -1691,7 +1694,7 @@ def _convert_unit_value(value):
 
     return UNIT_CONVERSION_MAP.get(normalized, normalized)
 
-def _postprocess_unit_fields(rows: list):
+def _postprocess_unit_fields(rows: list, vendor_id: str = "default"):
     UNIT_FIELDS = [
         "inv_quantity_unit",
         # "pl_weight_unit",
@@ -1702,6 +1705,11 @@ def _postprocess_unit_fields(rows: list):
         # "bl_volume_unit",
     ]
 
+    # Vendor fox: dokumen Fox tidak mencantumkan satuan di kolom quantity,
+    # tetapi ekstraksi kadang mengisi 'PCS'. Paksa inv_quantity_unit jadi null
+    # supaya konsisten (semua null) dan tidak memicu po_unit mismatch palsu.
+    force_null_quantity_unit = _is_fox_vendor(vendor_id)
+
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -1709,6 +1717,9 @@ def _postprocess_unit_fields(rows: list):
         for key in UNIT_FIELDS:
             if key in row:
                 row[key] = _convert_unit_value(row.get(key))
+
+        if force_null_quantity_unit:
+            row["inv_quantity_unit"] = "null"
 
 def _preprocess_invoice_no_for_grouping(value):
     """
@@ -7217,6 +7228,20 @@ def _is_missing_num(v) -> bool:
     except:
         return True
 
+def _is_foc_zero_amount_row(row: dict) -> bool:
+    """
+    Deteksi baris FOC (Free of Charge): inv_amount = 0.
+
+    Pada dokumen FOC, barang diberikan gratis sehingga inv_amount memang 0
+    walaupun inv_quantity * inv_unit_price > 0. Untuk baris seperti ini,
+    validasi aritmatika inv_amount == inv_quantity * inv_unit_price tidak
+    relevan dan tidak boleh dianggap gagal.
+    """
+    if not isinstance(row, dict):
+        return False
+    amt = _to_float(row.get("inv_amount"))
+    return amt is not None and abs(amt) <= 0.01
+
 def _apply_header_to_rows(rows: list, header_obj: dict, vendor_id: str = "default"):
     if not isinstance(header_obj, dict):
         header_obj = {}
@@ -7420,7 +7445,9 @@ def _validate_invoice_rows(rows: list):
             if qty is not None and up is not None and amt is not None:
                 expected = qty * up
                 # toleransi 0.01 untuk rounding
-                if abs(expected - amt) > 0.01:
+                # FOC (Free of Charge): inv_amount = 0 itu valid (barang gratis),
+                # jadi jangan gagalkan cek aritmatika untuk baris seperti ini.
+                if abs(expected - amt) > 0.01 and not _is_foc_zero_amount_row(r):
                     _append_err(r, f"Invoice: inv_amount != inv_quantity*inv_unit_price (exp {expected}, got {amt})")
 
     # validasi total (pakai declared total di dokumen yang diekstrak Gemini)
@@ -11765,7 +11792,7 @@ def _run_detail_precheck_pass(rows: list, header_obj: dict, vendor_id: str = "de
     _postprocess_customer_po_no(rows)
     _postprocess_inv_description(rows)
     _postprocess_item_no_fields(rows)
-    _postprocess_unit_fields(rows)
+    _postprocess_unit_fields(rows, vendor_id=vendor_id)
     # [INV-ONLY] disabled: post-processing COO (menambah kolom coo_seq dll.).
     # _postprocess_coo_description(rows)
     #
@@ -13777,7 +13804,7 @@ def run_ocr(
                 vendor_id=vendor_id
             )
 
-            _postprocess_unit_fields(container_data)
+            _postprocess_unit_fields(container_data, vendor_id=vendor_id)
 
         # =========================================
         # FLOW VALIDASI FINAL LAMA TETAP JALAN
@@ -13839,7 +13866,7 @@ def run_ocr(
         _postprocess_customer_po_no(all_rows)
         _postprocess_inv_description(all_rows)
         _postprocess_item_no_fields(all_rows)
-        _postprocess_unit_fields(all_rows)
+        _postprocess_unit_fields(all_rows, vendor_id=vendor_id)
         if has_coo_doc:
             _postprocess_coo_description(all_rows)
 
