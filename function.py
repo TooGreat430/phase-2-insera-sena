@@ -7340,15 +7340,38 @@ def _validate_po(detail_rows):
             continue
 
         inv_price = _to_num(row.get("inv_unit_price"))
-        po_price  = _to_num(po_data.get("po_price"))
         inv_currency = str(row.get("inv_price_unit") or "").strip()
+
+        po_price  = _to_num(po_data.get("po_price"))
         po_currency  = str(po_data.get("po_currency") or "").strip()
+        po_info_price = _to_num(po_data.get("po_info_record_price"))
+        po_info_currency = str(po_data.get("po_info_record_currency") or "").strip()
 
-        if inv_price is not None and po_price is not None and inv_price != po_price:
-            _append_err(row, f"po_price mismatch (inv: {inv_price}, po: {po_price})")
+        # Pilih harga PO pembanding yang SE-MATA-UANG dengan invoice.
+        # Sebagian vendor (mis. chengs) menerbitkan invoice dalam mata uang lokal
+        # (mis. TWD) sedangkan po_price adalah mata uang dasar PO (mis. USD),
+        # sementara po_info_record_price menyimpan harga dalam mata uang invoice.
+        # Membandingkan TWD vs USD selalu memunculkan mismatch palsu padahal
+        # info-record price sebenarnya cocok. Jadi bila currency invoice != currency
+        # po_price TAPI sama dengan currency po_info_record, bandingkan ke info-record.
+        compare_price = po_price
+        compare_currency = po_currency
+        if (
+            inv_currency
+            and po_currency
+            and inv_currency.upper() != po_currency.upper()
+            and po_info_currency
+            and inv_currency.upper() == po_info_currency.upper()
+            and po_info_price is not None
+        ):
+            compare_price = po_info_price
+            compare_currency = po_info_currency
 
-        if inv_currency and po_currency and inv_currency != po_currency:
-            _append_err(row, f"po_currency mismatch (inv: {inv_currency}, po: {po_currency})")
+        if inv_price is not None and compare_price is not None and inv_price != compare_price:
+            _append_err(row, f"po_price mismatch (inv: {inv_price}, po: {compare_price})")
+
+        if inv_currency and compare_currency and inv_currency.upper() != compare_currency.upper():
+            _append_err(row, f"po_currency mismatch (inv: {inv_currency}, po: {compare_currency})")
 
         inv_qty_unit = _convert_unit_value(row.get("inv_quantity_unit"))
         po_unit = _convert_unit_value(po_data.get("po_unit"))
@@ -7471,11 +7494,31 @@ def _validate_invoice_rows(rows: list):
             sum_amt += a
             amt_ok = True
 
+    # Deteksi invoice multi-unit: bila line item memakai >1 satuan quantity berbeda
+    # (mis. chengs: GRO/SET/PCE/PRS/KG/DR), inv_total_quantity di dokumen hanya
+    # mewakili subtotal SATU unit (mis. PCE), sehingga membandingkannya dengan
+    # sum(inv_quantity) lintas-unit tidak valid -> lewati cek total_quantity.
+    # inv_total_amount tetap valid karena semua amount satu mata uang.
+    distinct_qty_units = set()
+    for r in rows:
+        if not isinstance(r, dict) or _is_secondary_po_split_row(r):
+            continue
+        if not _to_float(r.get("inv_quantity")):
+            continue
+        u = _convert_unit_value(r.get("inv_quantity_unit"))
+        if u and u != "null":
+            distinct_qty_units.add(u)
+    is_multi_unit_invoice = len(distinct_qty_units) > 1
+
     # apply ke semua row (biar match_score konsisten per row)
     for r in rows:
         if not isinstance(r, dict):
             continue
-        if declared_qty is not None and qty_ok and abs(sum_qty - declared_qty) > 0.01:
+        if (
+            declared_qty is not None and qty_ok
+            and not is_multi_unit_invoice
+            and abs(sum_qty - declared_qty) > 0.01
+        ):
             _append_err(r, f"Invoice: total_quantity mismatch (sum {sum_qty}, doc {declared_qty})")
         if declared_amt is not None and amt_ok and abs(sum_amt - declared_amt) > 0.01:
             _append_err(r, f"Invoice: total_amount mismatch (sum {sum_amt}, doc {declared_amt})")
@@ -13261,6 +13304,11 @@ def run_ocr(
             # (blok ter-duplikat + blok ter-skip). Kirim PDF multi-page asli supaya
             # self-check anchor trio di index prompt berfungsi. Isolated ke haomeng.
             "haomeng",
+            # chengs: alasan sama seperti haomeng (invoice puluhan halaman, sangat
+            # repetitif) -> dup/skip struktural saat one-page merge. Kirim PDF asli.
+            # Karena total_row chengs umumnya >=90, ini sekaligus mengaktifkan
+            # per-batch page slicing di bawah. Isolated ke chengs.
+            "chengs",
         }
 
         if _skip_onepage_preprocess:
@@ -13560,10 +13608,10 @@ def run_ocr(
             is_karet_deli = normalize_vendor_id(vendor_id) == "karet_deli"
             # Per-batch PDF slicing hanya valid bila merged_pdf_detail adalah PDF
             # multi-halaman ASLI, yaitu vendor yang SKIP one-page preprocess
-            # (mis. shimano/karet_deli). Untuk vendor one-page-merged (mis. chengs),
-            # merged_pdf_detail = 1 halaman panjang sehingga nomor halaman index
-            # tidak cocok dan slicing bisa menghasilkan PDF 0 halaman
-            # ("The document has no pages"). Vendor itu pakai full PDF.
+            # (mis. shimano/karet_deli/haomeng/chengs). Untuk vendor yang TIDAK
+            # di-skip (tetap one-page merge), merged_pdf_detail = 1 halaman panjang
+            # sehingga nomor halaman index tidak cocok dan slicing bisa menghasilkan
+            # PDF 0 halaman ("The document has no pages"). Vendor itu pakai full PDF.
             if _skip_onepage_preprocess and total_detail_pages > 1 and (total_row >= 90 or is_karet_deli):
                 pages = [
                     int(x.get("page_no") or x.get("page", 0))
