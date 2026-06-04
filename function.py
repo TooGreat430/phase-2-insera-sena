@@ -42,7 +42,7 @@ from vendor_detection import (
 )
 
 BATCH_SIZE = 30
-CHENGS_DETAIL_BATCH_SIZE = 3
+CHENGS_DETAIL_BATCH_SIZE = 30
 DETAIL_GEMINI_RECHECK_BATCH_SIZE = int(os.getenv("DETAIL_GEMINI_RECHECK_BATCH_SIZE", "30"))
 test_number = 2
 
@@ -164,15 +164,15 @@ def _get_detail_batch_size_for_vendor(vendor_id: str = "default") -> int:
     Batch size khusus detail extraction.
 
     Default = BATCH_SIZE.
-    Khusus vendor chengs = CHENGS_DETAIL_BATCH_SIZE (3).
-    Konfigurasi yang TERBUKTI akurat untuk chengs = konteks halaman PENUH + batch
-    KECIL (3). Per-batch slicing DIMATIKAN untuk chengs (lihat is_chengs di base
-    detail & recheck) supaya model membaca PDF penuh. Catatan eksperimen:
-    - slice ±1 halaman + batch 3  -> qty sebagian ter-misread (konteks halaman hilang)
-    - PDF penuh + batch 30        -> qty target pulih TAPI model under-read baris lain
-                                     (kehilangan penyelarasan saat ekstrak 30 baris/call)
-    - PDF penuh + batch 3         -> meniru era one-page yang akurat; ~127 panggilan
-                                     (lambat/boros token) tapi penyelarasan per-baris terbaik.
+    Khusus vendor chengs = CHENGS_DETAIL_BATCH_SIZE (30). Per-batch slicing
+    DIMATIKAN untuk chengs (lihat is_chengs di base detail & recheck) -> baca PDF penuh.
+    Catatan eksperimen (C25-1467T, 380 baris/47 hal):
+    - slice ±1 halaman + batch 3 -> sebagian qty ter-misread (konteks halaman hilang)
+    - PDF penuh + batch 30        -> sum 10.78jt
+    - PDF penuh + batch 3         -> sum 10.88jt (~127 panggilan, lambat/boros)
+    Batch 3 TIDAK lebih akurat dari 30 (selisih ~1%, error stokastik cuma pindah baris),
+    jadi dipakai 30 (~13 panggilan, jauh lebih hemat). Akurasi/keandalan ditangani
+    lewat cross-pass confidence label (INDEX vs DETAIL qty), bukan batch size.
     """
     if normalize_vendor_id(vendor_id) == "chengs":
         return CHENGS_DETAIL_BATCH_SIZE
@@ -4015,6 +4015,90 @@ def _row_has_any_total_issue(row: dict) -> bool:
     return any(_is_total_issue_message(msg) for msg in meaningful_messages)
 
 
+def _crosspass_to_number(x):
+    """Parse angka secara ketat untuk perbandingan cross-pass.
+    Mengembalikan None bila bukan angka valid ("null"/kosong/non-numeric),
+    supaya baris tanpa nilai tidak ter-flag palsu."""
+    if x is None:
+        return None
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, (int, float)):
+        return float(x)
+    s = str(x).strip().replace(",", "")
+    if s == "" or s.lower() == "null":
+        return None
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _crosspass_qty_mismatch_reason(row):
+    """Sinyal reliabilitas per-baris yang DETERMINISTIK:
+    inv_quantity hasil pass INDEX (baca PDF penuh) vs hasil pass DETAIL.
+    Dua pembacaan independen; kalau beda, baris ini tidak bisa dipercaya
+    dan WAJIB dicek manual -> kembalikan alasan. Kalau setuju -> None.
+
+    Hanya aktif untuk baris yang membawa _index_inv_quantity
+    (di-attach khusus chengs). Baris CHILD PO di-skip (qty-nya 0 hasil split)."""
+    if not isinstance(row, dict):
+        return None
+    if "_index_inv_quantity" not in row:
+        return None
+    if str(row.get("match_score", "")).strip().upper() == "CHILD PO":
+        return None
+    idx_q = _crosspass_to_number(row.get("_index_inv_quantity"))
+    det_q = _crosspass_to_number(row.get("inv_quantity"))
+    if idx_q is None or det_q is None:
+        return None
+    if abs(idx_q - det_q) > 0.5:
+        return (
+            f"qty cross-pass mismatch (index={idx_q:g}, detail={det_q:g}) "
+            f"-> baris ini perlu cek manual"
+        )
+    return None
+
+
+def _append_crosspass_note(row, note):
+    """Tempelkan alasan cross-pass ke match_description supaya reviewer
+    langsung tahu kenapa baris ini negative, tanpa menimpa pesan lain."""
+    if not note:
+        return
+    cur = row.get("match_description")
+    cur_s = str(cur).strip() if cur is not None else ""
+    if cur_s and cur_s.lower() != "null":
+        if note not in cur_s:
+            row["match_description"] = f"{cur_s}; {note}"
+    else:
+        row["match_description"] = note
+
+
+def _attach_index_quantity_for_crosspass(all_rows, index_items, vendor_id="default"):
+    """Simpan inv_quantity hasil pass INDEX ke tiap baris detail sebagai
+    _index_inv_quantity, untuk dibandingkan dengan inv_quantity hasil pass
+    DETAIL di _finalize_audit_confidence_labels (cross-pass self-consistency).
+
+    Diisolasi ke chengs. WAJIB dipanggil tepat setelah base detail assembly,
+    saat rows masih 1:1 dengan index_items (punya _expected_index, belum ada
+    child PO split). _index_inv_quantity berprefix "_" sehingga tidak ikut
+    ke CSV final."""
+    if normalize_vendor_id(vendor_id) != "chengs":
+        return
+    if not isinstance(all_rows, list) or not isinstance(index_items, list) or not index_items:
+        return
+    n = len(index_items)
+    for row in all_rows:
+        if not isinstance(row, dict):
+            continue
+        ei = _get_row_expected_index(row)
+        if ei is None or ei < 1 or ei > n:
+            continue
+        anchor = index_items[ei - 1]
+        if isinstance(anchor, dict):
+            row["_index_inv_quantity"] = anchor.get("inv_quantity")
+
+
 def _finalize_audit_confidence_labels(rows: list, total_attribution=None):
     """
     Final confidence rule:
@@ -4069,8 +4153,16 @@ def _finalize_audit_confidence_labels(rows: list, total_attribution=None):
     if not confidence_total_groups:
         for row in rows:
             if isinstance(row, dict):
-                row["confidence_label"] = "positive"
-                row["_confidence_label_source"] = "no_total_issue"
+                # Cross-pass qty mismatch tetap di-flag walau total cocok:
+                # itu sinyal reliabilitas per-baris yang berdiri sendiri.
+                cp_reason = _crosspass_qty_mismatch_reason(row)
+                if cp_reason and str(row.get("match_score", "")).strip().upper() not in ("TRUE", "CHILD PO"):
+                    row["confidence_label"] = "negative"
+                    row["_confidence_label_source"] = "crosspass_qty_mismatch"
+                    _append_crosspass_note(row, cp_reason)
+                else:
+                    row["confidence_label"] = "positive"
+                    row["_confidence_label_source"] = "no_total_issue"
         return rows
 
     for idx, row in enumerate(rows):
@@ -4095,6 +4187,18 @@ def _finalize_audit_confidence_labels(rows: list, total_attribution=None):
         if match_score in ("TRUE", "CHILD PO"):
             row["confidence_label"] = "positive"
             row["_confidence_label_source"] = "hard_rule_match_true"
+            continue
+
+        # DETERMINISTIK (prioritas di atas sinyal Gemini yang noisy):
+        # cross-pass quantity self-consistency. inv_quantity pass INDEX
+        # (baca PDF penuh) vs pass DETAIL. Beda -> baris tidak bisa dipercaya,
+        # set negative + alasan eksplisit supaya reviewer tahu persis baris
+        # mana yang wajib dicek manual (pinpoint, bukan pukul rata).
+        cp_reason = _crosspass_qty_mismatch_reason(row)
+        if cp_reason:
+            row["confidence_label"] = "negative"
+            row["_confidence_label_source"] = "crosspass_qty_mismatch"
+            _append_crosspass_note(row, cp_reason)
             continue
 
         if row.get("_gemini_total_issue_negative"):
@@ -13698,6 +13802,11 @@ def run_ocr(
             batch_size=detail_batch_size,
             vendor_id=vendor_id
         )
+
+        # Cross-pass self-consistency: simpan inv_quantity hasil pass INDEX
+        # ke tiap baris (saat masih 1:1 dengan index_items, sebelum PO split),
+        # untuk dibandingkan dgn hasil pass DETAIL di finalize confidence label.
+        _attach_index_quantity_for_crosspass(all_rows, index_items, vendor_id)
 
         # =========================================
         # KARET DELI: DETECT-THEN-REFOCUSED-RETRY untuk pl_total_quantity.
