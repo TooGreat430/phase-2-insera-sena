@@ -258,20 +258,20 @@ TOTAL_NUM_FIELDS = {
     "inv_total_volume",
     "inv_total_package",
 
-    "pl_package_count",
-    "pl_nw",
-    "pl_gw",
-    "pl_volume",
-    "pl_total_quantity",
-    "pl_total_amount",
-    "pl_total_nw",
-    "pl_total_gw",
-    "pl_total_volume",
-    "pl_total_package",
+    # "pl_package_count",
+    # "pl_nw",
+    # "pl_gw",
+    # "pl_volume",
+    # "pl_total_quantity",
+    # "pl_total_amount",
+    # "pl_total_nw",
+    # "pl_total_gw",
+    # "pl_total_volume",
+    # "pl_total_package",
 
-    "bl_gw",
-    "bl_volume",
-    "bl_package_count",
+    # "bl_gw",
+    # "bl_volume",
+    # "bl_package_count",
 }
 
 # ==============================
