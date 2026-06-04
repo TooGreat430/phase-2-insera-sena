@@ -207,39 +207,39 @@ TOTAL_OUTPUT_FIELDS = [
     "inv_total_volume",
     "inv_total_package",
 
-    "pl_package_unit",
-    "pl_package_count",
-    "pl_nw",
-    "pl_gw",
-    "pl_volume",
-    "pl_total_quantity",
-    "pl_total_amount",
-    "pl_total_nw",
-    "pl_total_gw",
-    "pl_total_volume",
-    "pl_total_package",
+    # "pl_package_unit",
+    # "pl_package_count",
+    # "pl_nw",
+    # "pl_gw",
+    # "pl_volume",
+    # "pl_total_quantity",
+    # "pl_total_amount",
+    # "pl_total_nw",
+    # "pl_total_gw",
+    # "pl_total_volume",
+    # "pl_total_package",
 
-    "bl_shipper_name",
-    "bl_shipper_address",
-    "bl_no",
-    "bl_date",
-    "bl_consignee_name",
-    "bl_consignee_address",
-    "bl_consignee_tax_id",
-    "bl_seller_name",
-    "bl_seller_address",
-    "bl_lc_number",
-    "bl_notify_party",
-    "bl_vessel",
-    "bl_voyage_no",
-    "bl_port_of_loading",
-    "bl_port_of_destination",
-    "bl_gw_unit",
-    "bl_gw",
-    "bl_volume_unit",
-    "bl_volume",
-    "bl_package_count",
-    "bl_package_unit",
+    # "bl_shipper_name",
+    # "bl_shipper_address",
+    # "bl_no",
+    # "bl_date",
+    # "bl_consignee_name",
+    # "bl_consignee_address",
+    # "bl_consignee_tax_id",
+    # "bl_seller_name",
+    # "bl_seller_address",
+    # "bl_lc_number",
+    # "bl_notify_party",
+    # "bl_vessel",
+    # "bl_voyage_no",
+    # "bl_port_of_loading",
+    # "bl_port_of_destination",
+    # "bl_gw_unit",
+    # "bl_gw",
+    # "bl_volume_unit",
+    # "bl_volume",
+    # "bl_package_count",
+    # "bl_package_unit",
 ]
 
 # saya append match fields di belakang supaya flow validasi existing tetap konsisten
@@ -314,12 +314,12 @@ TOTAL_DETAIL_AGG_FIELDS = [
     "inv_total_volume",
     "inv_total_package",
 
-    "pl_total_quantity",
-    "pl_total_amount",
-    "pl_total_nw",
-    "pl_total_gw",
-    "pl_total_volume",
-    "pl_total_package",
+    # "pl_total_quantity",
+    # "pl_total_amount",
+    # "pl_total_nw",
+    # "pl_total_gw",
+    # "pl_total_volume",
+    # "pl_total_package",
 ]
 
 # FUNCTION MATCH DESCRIPTION ROW CONTINUATION
@@ -328,10 +328,10 @@ ZERO_CONTINUATION_MATCH_DESCRIPTION_FIELDS = [
     "inv_quantity",
     "inv_unit_price",
     "inv_amount",
-    "pl_quantity",
-    "pl_nw",
-    "pl_gw",
-    "pl_volume",
+    # "pl_quantity",
+    # "pl_nw",
+    # "pl_gw",
+    # "pl_volume",
 ]
 
 def _create_sliced_pdf_for_batch(input_pdf: str, start_page_idx: int, end_page_idx: int) -> str:
@@ -627,12 +627,12 @@ INVOICE_TOTAL_HEADER_FIELDS = (
     "inv_total_gw",
     "inv_total_volume",
     "inv_total_package",
-    "pl_total_quantity",
-    "pl_total_amount",
-    "pl_total_nw",
-    "pl_total_gw",
-    "pl_total_volume",
-    "pl_total_package",
+    # "pl_total_quantity",
+    # "pl_total_amount",
+    # "pl_total_nw",
+    # "pl_total_gw",
+    # "pl_total_volume",
+    # "pl_total_package",
 )
 
 
@@ -1693,12 +1693,12 @@ def _convert_unit_value(value):
 def _postprocess_unit_fields(rows: list):
     UNIT_FIELDS = [
         "inv_quantity_unit",
-        "pl_weight_unit",
-        "pl_volume_unit",
-        "coo_unit",
-        "coo_gw_unit",
-        "bl_gw_unit",
-        "bl_volume_unit",
+        # "pl_weight_unit",
+        # "pl_volume_unit",
+        # "coo_unit",
+        # "coo_gw_unit",
+        # "bl_gw_unit",
+        # "bl_volume_unit",
     ]
 
     for row in rows:
@@ -2816,43 +2816,43 @@ def _build_total_from_detail_and_container(detail_rows: list, container_rows):
         "inv_total_volume": aggregated_total_fields["inv_total_volume"],
         "inv_total_package": aggregated_total_fields["inv_total_package"],
 
-        "pl_package_unit": _first_text(detail_rows, "pl_package_unit"),
-        "pl_package_count": _sum_numeric(detail_rows, "pl_package_count"),
-        "pl_nw": _sum_numeric(detail_rows, "pl_nw"),
-        "pl_gw": _sum_numeric(detail_rows, "pl_gw"),
-        "pl_volume": _sum_numeric(detail_rows, "pl_volume"),
+        # "pl_package_unit": _first_text(detail_rows, "pl_package_unit"),
+        # "pl_package_count": _sum_numeric(detail_rows, "pl_package_count"),
+        # "pl_nw": _sum_numeric(detail_rows, "pl_nw"),
+        # "pl_gw": _sum_numeric(detail_rows, "pl_gw"),
+        # "pl_volume": _sum_numeric(detail_rows, "pl_volume"),
 
-        "pl_total_quantity": aggregated_total_fields["pl_total_quantity"],
-        "pl_total_amount": aggregated_total_fields["pl_total_amount"],
-        "pl_total_nw": aggregated_total_fields["pl_total_nw"],
-        "pl_total_gw": aggregated_total_fields["pl_total_gw"],
-        "pl_total_volume": aggregated_total_fields["pl_total_volume"],
-        "pl_total_package": aggregated_total_fields["pl_total_package"],
+        # "pl_total_quantity": aggregated_total_fields["pl_total_quantity"],
+        # "pl_total_amount": aggregated_total_fields["pl_total_amount"],
+        # "pl_total_nw": aggregated_total_fields["pl_total_nw"],
+        # "pl_total_gw": aggregated_total_fields["pl_total_gw"],
+        # "pl_total_volume": aggregated_total_fields["pl_total_volume"],
+        # "pl_total_package": aggregated_total_fields["pl_total_package"],
 
         # =========================
         # CONTAINER
         # =========================
-        "bl_shipper_name": _first_text(container_rows, "bl_shipper_name"),
-        "bl_shipper_address": _first_text(container_rows, "bl_shipper_address"),
-        "bl_no": _first_text(container_rows, "bl_no"),
-        "bl_date": _first_text(container_rows, "bl_date"),
-        "bl_consignee_name": _first_text(container_rows, "bl_consignee_name"),
-        "bl_consignee_address": _first_text(container_rows, "bl_consignee_address"),
-        "bl_consignee_tax_id": _first_text(container_rows, "bl_consignee_tax_id"),
-        "bl_seller_name": _first_text(container_rows, "bl_seller_name"),
-        "bl_seller_address": _first_text(container_rows, "bl_seller_address"),
-        "bl_lc_number": _first_text(container_rows, "bl_lc_number"),
-        "bl_notify_party": _first_text(container_rows, "bl_notify_party"),
-        "bl_vessel": _first_text(container_rows, "bl_vessel"),
-        "bl_voyage_no": _first_text(container_rows, "bl_voyage_no"),
-        "bl_port_of_loading": _first_text(container_rows, "bl_port_of_loading"),
-        "bl_port_of_destination": _first_text(container_rows, "bl_port_of_destination"),
-        "bl_gw_unit": _convert_unit_value(_first_text(container_rows, "bl_gw_unit")),
-        "bl_gw": _sum_numeric(container_rows, "bl_gw"),
-        "bl_volume_unit": _convert_unit_value(_first_text(container_rows, "bl_volume_unit")),
-        "bl_volume": _sum_numeric(container_rows, "bl_volume"),
-        "bl_package_count": _sum_numeric(container_rows, "bl_package_count"),
-        "bl_package_unit": _first_text(container_rows, "bl_package_unit"),
+        # "bl_shipper_name": _first_text(container_rows, "bl_shipper_name"),
+        # "bl_shipper_address": _first_text(container_rows, "bl_shipper_address"),
+        # "bl_no": _first_text(container_rows, "bl_no"),
+        # "bl_date": _first_text(container_rows, "bl_date"),
+        # "bl_consignee_name": _first_text(container_rows, "bl_consignee_name"),
+        # "bl_consignee_address": _first_text(container_rows, "bl_consignee_address"),
+        # "bl_consignee_tax_id": _first_text(container_rows, "bl_consignee_tax_id"),
+        # "bl_seller_name": _first_text(container_rows, "bl_seller_name"),
+        # "bl_seller_address": _first_text(container_rows, "bl_seller_address"),
+        # "bl_lc_number": _first_text(container_rows, "bl_lc_number"),
+        # "bl_notify_party": _first_text(container_rows, "bl_notify_party"),
+        # "bl_vessel": _first_text(container_rows, "bl_vessel"),
+        # "bl_voyage_no": _first_text(container_rows, "bl_voyage_no"),
+        # "bl_port_of_loading": _first_text(container_rows, "bl_port_of_loading"),
+        # "bl_port_of_destination": _first_text(container_rows, "bl_port_of_destination"),
+        # "bl_gw_unit": _convert_unit_value(_first_text(container_rows, "bl_gw_unit")),
+        # "bl_gw": _sum_numeric(container_rows, "bl_gw"),
+        # "bl_volume_unit": _convert_unit_value(_first_text(container_rows, "bl_volume_unit")),
+        # "bl_volume": _sum_numeric(container_rows, "bl_volume"),
+        # "bl_package_count": _sum_numeric(container_rows, "bl_package_count"),
+        # "bl_package_unit": _first_text(container_rows, "bl_package_unit"),
     }
 
     _ensure_total_keys(total_obj)
@@ -2885,23 +2885,23 @@ DETAIL_ROW_DEDUP_COMPARE_FIELDS = [
     "inv_spart_item_no",
     "inv_quantity",
     "inv_unit_price",
-    "pl_customer_po_no",
-    "pl_spart_item_no",   # alias -> pl_item_no bila field ini tidak ada
-    "pl_package_count",
-    "pl_quantity",
-    "pl_nw",
-    "pl_gw",
-    "pl_volume",
+    # "pl_customer_po_no",
+    # "pl_spart_item_no",   # alias -> pl_item_no bila field ini tidak ada
+    # "pl_package_count",
+    # "pl_quantity",
+    # "pl_nw",
+    # "pl_gw",
+    # "pl_volume",
 ]
 
 DETAIL_ROW_DEDUP_NUM_FIELDS = {
     "inv_quantity",
     "inv_unit_price",
-    "pl_package_count",
-    "pl_quantity",
-    "pl_nw",
-    "pl_gw",
-    "pl_volume",
+    # "pl_package_count",
+    # "pl_quantity",
+    # "pl_nw",
+    # "pl_gw",
+    # "pl_volume",
 }
 
 def _validate_total_rows(total_data, detail_rows: list):
@@ -4768,8 +4768,6 @@ def _validate_detail_batch_rows(
     json_array.sort(key=lambda r: int(r.get("_expected_index")))
 
     return json_array
-
-    
 
 def _run_one_detail_batch(
     file_uri_detail: str,
@@ -13588,19 +13586,18 @@ def run_ocr(
         # GRAND TOTAL — panggil Gemini 1x dengan prompt super-fokus
         # supaya pilih yang benar. Bounded 1 retry, tidak ada loop.
         # =========================================
-        # [INV-ONLY] disabled: refocus pl_total_quantity (PL-specific) untuk karet_deli.
-        # if normalize_vendor_id(vendor_id) == "karet_deli":
-        #     _karet_deli_refocus_pl_total_quantity(
-        #         file_uri=base_detail_input_uri,
-        #         all_rows=all_rows,
-        #         base_header_obj=base_header_obj,
-        #         vendor_id=vendor_id,
-        #     )
-        #     # Sinkronkan header_obj kalau base_header_obj sudah di-update.
-        #     # _merge_optional_header_into_base_header tidak override pl_*,
-        #     # jadi header_obj juga harus disinkronkan manual.
-        #     if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
-        #         header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
+        if normalize_vendor_id(vendor_id) == "karet_deli":
+            _karet_deli_refocus_pl_total_quantity(
+                file_uri=base_detail_input_uri,
+                all_rows=all_rows,
+                base_header_obj=base_header_obj,
+                vendor_id=vendor_id,
+            )
+            # Sinkronkan header_obj kalau base_header_obj sudah di-update.
+            # _merge_optional_header_into_base_header tidak override pl_*,
+            # jadi header_obj juga harus disinkronkan manual.
+            if base_header_obj.get("pl_total_quantity") != header_obj.get("pl_total_quantity"):
+                header_obj["pl_total_quantity"] = base_header_obj.get("pl_total_quantity")
 
         # =========================================
         # PRECHECK PYTHON
@@ -13861,13 +13858,11 @@ def run_ocr(
 
         all_rows = _map_po_to_details(po_lines, all_rows, vendor_id=vendor_id)
 
-        # [INV-ONLY] disabled: deduplikasi numerik PL.
-        # all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
+        all_rows = _deduplicate_pl_numeric_fields_for_vendors(all_rows, vendor_id=vendor_id)
 
         all_rows = _generate_inv_amount_before_validation(all_rows)
 
-        # [INV-ONLY] disabled: post-processing zero->null BL/COO.
-        # _postprocess_bl_coo_zero_to_null(all_rows)
+        _postprocess_bl_coo_zero_to_null(all_rows)
         _postprocess_invoice_no_consensus(all_rows)
 
         if has_bl_doc:
@@ -13947,16 +13942,15 @@ def run_ocr(
             columns=["inv_total_quantity", "pl_total_package"],
         )
  
-        # [INV-ONLY] disabled: post-processing numerik COO (berbasis PL/COO).
-        # if _is_coo_aggregate_top_row_vendor(vendor_id):
-        #     # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
-        #     # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
-        #     # COO. Jangan distribusi per-baris mengikuti PL.
-        #     _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
-        # elif normalize_vendor_id(vendor_id) != "liow_ko":
-        #     _postprocess_coo_numeric_fields_from_pl(all_rows)
-        # else:
-        #     print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
+        if _is_coo_aggregate_top_row_vendor(vendor_id):
+            # COO ter-agregat (mis. joy): tampilkan nilai agregat per produk di
+            # SATU baris (baris pertama group) + 0 di baris lain, sesuai dokumen
+            # COO. Jangan distribusi per-baris mengikuti PL.
+            _postprocess_coo_aggregate_to_top_row(all_rows, vendor_id=vendor_id)
+        elif normalize_vendor_id(vendor_id) != "liow_ko":
+            _postprocess_coo_numeric_fields_from_pl(all_rows)
+        else:
+            print("[COO_NUMERIC_FROM_PL] skipped for vendor liow_ko")
 
         # JOY: setelah PO mapping, ringkas inv_quantity/inv_amount merged-cell
         # ke baris teratas group (mis. 480/0/0/0), sesuai dokumen invoice.
@@ -13970,9 +13964,8 @@ def run_ocr(
         _kunshan_landon_realign_descriptions(all_rows, vendor_id)
 
         _validate_invoice_rows(all_rows)
-        # [INV-ONLY] disabled: validasi PL & cross-check INV-vs-PL.
-        # _validate_packing_rows(all_rows, vendor_id=vendor_id)
-        # _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
+        _validate_packing_rows(all_rows, vendor_id=vendor_id)
+        _validate_invoice_vs_packing_extra(all_rows, vendor_id=vendor_id)
 
         if has_bl_doc:
             _validate_bl_rows(all_rows)
