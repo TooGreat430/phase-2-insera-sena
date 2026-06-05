@@ -631,8 +631,12 @@ INVOICE NUMBER EXTRACTION RULES (SANGAT PENTING):
    - Biasanya muncul di bagian akhir dokumen atau bagian ringkasan, satu baris bersama total amount atau informasi ringkasan lainnya.
       Contoh: 7,290 PCS
       maka, inv_total_quantity = 7290
+   - Apabila pada bagian quantity akhir terdapat beberapa value dengan unit yang berbeda, maka jumlahkan semua value tersebut untuk mendapatkan inv_total_quantity.
+      Contoh:
+      TOTAL 30,037.00 PCS
+            400.00 SETS
+      maka inv_total_quantity = 30437 (hasil penjumlahan 30037 + 400)
    - Jika tidak tersedia secara eksplisit dan jelas dari dokumen invoice, maka isi dengan "null".
-   - JANGAN menghitung, menjumlahkan, mengarang, atau mengambil dari dokumen lain jika value total quantity tidak tersedia.
 
 9. inv_price_unit SAMA dengan inv_amount_unit:
    - Kedua field ini mempresentasikan mata uang (currency).  
