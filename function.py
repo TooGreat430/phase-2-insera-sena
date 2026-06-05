@@ -5554,6 +5554,7 @@ def _map_single_detail_row_to_po(
     po_article_index,
     po_desc_index,
     remaining_state,
+    qty_agnostic=False,
 ):
     if not isinstance(row, dict):
         return [row], False
@@ -5563,6 +5564,13 @@ def _map_single_detail_row_to_po(
     pl_article_norm = _norm_item_compare_key(row.get("pl_item_no"))
     inv_desc_norm = _norm_desc(row.get("inv_description"))
     extracted_qty = _get_extracted_qty_for_po(row)
+
+    # Vendor merged-cell invoice QTY di flow INV-ONLY: quantity per-baris tidak
+    # andal (merged subtotal di 1 baris, 0 di sisanya). Paksa map identitas
+    # (1 baris -> 1 PO line dalam bucket) dengan menonaktifkan alokasi berbasis
+    # quantity. Lihat _should_map_po_qty_agnostic.
+    if qty_agnostic:
+        extracted_qty = None
 
     if not inv_po_norm:
         failed_row = dict(row)
@@ -6142,6 +6150,39 @@ def _is_merged_invoice_qty_vendor(vendor_id: str) -> bool:
     return normalize_vendor_id(vendor_id) in VENDORS_WITH_MERGED_INVOICE_QTY
 
 
+def _should_map_po_qty_agnostic(detail_rows, vendor_id: str = "default") -> bool:
+    """
+    Tentukan apakah PO mapping harus ABAIKAN quantity (map identitas: 1 baris
+    invoice -> 1 PO line dalam bucket (customer_po, article)).
+
+    Latar belakang:
+    - Vendor merged-cell invoice QTY (lihat VENDORS_WITH_MERGED_INVOICE_QTY,
+      mis. joy) mencetak SATU subtotal merged-cell per group + 0 di baris lain.
+      Quantity merged ini TIDAK andal untuk alokasi PO berbasis quantity.
+    - Pada full-flow, _derive_inv_qty_from_pl_for_merged_vendors men-spread
+      pl_quantity -> inv_quantity per baris SEBELUM mapping, sehingga alokasi
+      berbasis quantity bekerja benar.
+    - Pada flow INV-ONLY (pl_* di-takeout), derivasi itu dimatikan dan
+      pl_quantity tidak tersedia. Tanpa quantity per-baris yang andal, alokasi
+      berbasis quantity gagal: baris ber-qty 0 tidak ter-map ("PO item tidak
+      ditemukan") dan baris pembawa subtotal salah-alokasi di dalam 1 bucket
+      customer_po. Maka pada kondisi ini kita map secara identitas saja.
+
+    Rule:
+    - Hanya untuk vendor merged-cell.
+    - Aktif HANYA jika tidak ada pl_quantity per-baris yang andal (> 0). Jika
+      pl_quantity tersedia (full-flow), biarkan alokasi berbasis quantity jalan.
+    """
+    if not _is_merged_invoice_qty_vendor(vendor_id):
+        return False
+
+    has_pl_qty = any(
+        isinstance(r, dict) and (_to_float(r.get("pl_quantity")) or 0.0) > 1e-9
+        for r in (detail_rows or [])
+    )
+    return not has_pl_qty
+
+
 def _derive_inv_qty_from_pl_for_merged_vendors(rows: list, vendor_id: str = "default"):
     """
     Khusus vendor dengan invoice merged-cell QTY/AMOUNT (lihat
@@ -6298,6 +6339,10 @@ def _map_po_to_details(po_lines, detail_rows, vendor_id="default"): # <-- Jangan
     # Cek apakah vendor saat ini butuh fallback
     use_po_fallback = _should_use_po_item_fallback(vendor_id)
 
+    # Vendor merged-cell invoice QTY (mis. joy) di flow INV-ONLY: map identitas,
+    # abaikan quantity merged yang tidak andal. Lihat _should_map_po_qty_agnostic.
+    qty_agnostic = _should_map_po_qty_agnostic(detail_rows, vendor_id)
+
     # first pass: mapping normal
     per_input_results = []
 
@@ -6347,8 +6392,9 @@ def _map_po_to_details(po_lines, detail_rows, vendor_id="default"): # <-- Jangan
             po_article_index=po_article_index,
             po_desc_index=po_desc_index,
             remaining_state=remaining_state,
+            qty_agnostic=qty_agnostic,
         )
-        
+
         # Revert (biarkan null kembali) jika mapping PO tetap gagal
         if used_desc_fallback and not success:
             row["inv_spart_item_no"] = original_inv_item
@@ -6367,6 +6413,7 @@ def _map_po_to_details(po_lines, detail_rows, vendor_id="default"): # <-- Jangan
                     po_article_index=po_article_index,
                     po_desc_index=po_desc_index,
                     remaining_state=remaining_state,
+                    qty_agnostic=qty_agnostic,
                 )
         # --------------------------------------------------
 
@@ -6394,6 +6441,7 @@ def _map_po_to_details(po_lines, detail_rows, vendor_id="default"): # <-- Jangan
                     po_article_index=po_article_index,
                     po_desc_index=po_desc_index,
                     remaining_state=remaining_state,
+                    qty_agnostic=qty_agnostic,
                 )
         # ---------------------------------------
         
@@ -6461,6 +6509,7 @@ def _map_po_to_details(po_lines, detail_rows, vendor_id="default"): # <-- Jangan
                 po_article_index=po_article_index,
                 po_desc_index=po_desc_index,
                 remaining_state=remaining_state,
+                qty_agnostic=qty_agnostic,
             )
 
             if success:
