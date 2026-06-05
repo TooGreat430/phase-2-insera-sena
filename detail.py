@@ -350,6 +350,20 @@ ATURAN KHUSUS VENDOR shimano_inc:
 - bl_mark_number TIDAK diekstrak pada header pass.
 - Isi bl_mark_number dengan "null" pada output header.
 - bl_mark_number untuk shimano_inc akan diekstrak pada content/detail pass dari dokumen Bill of Lading.
+
+ATURAN inv_total_quantity KHUSUS shimano_inc (SANGAT PENTING):
+- Pada baris "Total" / "Grand Total" di bagian bawah invoice, total quantity Shimano BISA dinyatakan dalam DUA satuan pada baris TERPISAH, mis. satu baris "<X> PCS" dan satu baris "<Y> SETS".
+- JIKA ada dua satuan (PCS dan SETS), inv_total_quantity WAJIB = X + Y (dijumlahkan).
+  Contoh persis dari dokumen Shimano:
+      3679 PCS
+      531 SETS
+      Grand Total JPY14,594,853
+  maka inv_total_quantity = 3679 + 531 = 4210 (BUKAN 3679 saja).
+- Baris "SETS" sering berada TEPAT DI BAWAH baris "PCS", atau tampak berdampingan/terselip dengan info kemasan (mis. "2 P/T", "83 C/T", "< 32 C/T >"). Tetap cari angka SETS itu dan jumlahkan ke angka PCS.
+- DILARANG KERAS:
+    (a) hanya mengambil angka PCS lalu mengabaikan SETS;
+    (b) menjumlahkan angka KEMASAN (P/T, C/T, PLT, CTN, PKGS) ke dalam inv_total_quantity — itu jumlah kemasan, BUKAN quantity.
+- JIKA total hanya satu satuan (mis. hanya PCS), ambil angka itu apa adanya.
 """
 
     kunshan_landon_header_rule = ""
